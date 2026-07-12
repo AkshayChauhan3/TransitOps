@@ -1,4 +1,4 @@
-import { Truck, MapPin, Calendar, Gauge } from "lucide-react"
+import { Truck, MapPin } from "lucide-react"
 
 const fleet = [
   { reg: "TX-984-Z", model: "Volvo FH16", type: "SEMI TRUCK", status: "AVAILABLE", region: "WEST" },

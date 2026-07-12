@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Bell, Monitor, Globe, Shield, Save } from "lucide-react"
+import { Bell, Monitor, Shield, Save } from "lucide-react"
 import { useTheme } from "../context/ThemeProvider"
 
 export default function Preferences() {

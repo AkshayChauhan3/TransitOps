@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import axiosClient from '../api/axiosClient';
@@ -13,8 +13,6 @@ import { Plus, MapPin, Weight, Navigation, Info, Clock, Filter, CheckCircle, XCi
 const tripSchema = z.object({
   source: z.string().min(2, 'Source is required'),
   destination: z.string().min(2, 'Destination is required'),
-  vehicleId: z.string().min(1, 'Vehicle is required'),
-  driverId: z.string().min(1, 'Driver is required'),
   cargoWeight: z.number().positive('Cargo weight must be positive'),
   distance: z.number().positive('Distance must be positive'),
 });
@@ -48,9 +46,22 @@ export const Trips: React.FC = () => {
   const [isCompleteOpen, setIsCompleteOpen] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
 
+  // Selected values for assignments inside detail modal
+  const [assignedVehicleId, setAssignedVehicleId] = useState<string>('');
+  const [assignedDriverId, setAssignedDriverId] = useState<string>('');
+
+  const isBranchAdmin = user?.role === 'BRANCH_ADMIN';
   const isFleetManager = user?.role === 'FLEET_MANAGER';
-  const isDriver = user?.role === 'DRIVER';
-  const hasLifecycleAccess = isFleetManager || isDriver;
+  const isSafetyOfficer = user?.role === 'SAFETY_OFFICER';
+  const isDispatcher = user?.role === 'DISPATCHER';
+
+  // Sync state with details modal
+  useEffect(() => {
+    if (activeTripDetails) {
+      setAssignedVehicleId(activeTripDetails.vehicleId || '');
+      setAssignedDriverId(activeTripDetails.driverId || '');
+    }
+  }, [activeTripDetails]);
 
   const { data: trips, isLoading: tripsLoading } = useQuery<Trip[]>({
     queryKey: ['trips', filterStatus],
@@ -59,19 +70,19 @@ export const Trips: React.FC = () => {
 
   const { data: dispatchableVehicles } = useQuery<Vehicle[]>({
     queryKey: ['vehicles', 'dispatchable'],
-    queryFn: async () => (await axiosClient.get('/vehicles', { params: { dispatchable: true } })).data,
-    enabled: isCreateOpen,
+    queryFn: async () => (await axiosClient.get('/vehicles', { params: { status: 'AVAILABLE' } })).data,
+    enabled: isCreateOpen || isFleetManager,
   });
 
   const { data: dispatchableDrivers } = useQuery<Driver[]>({
     queryKey: ['drivers', 'dispatchable'],
-    queryFn: async () => (await axiosClient.get('/drivers', { params: { dispatchable: true } })).data,
-    enabled: isCreateOpen,
+    queryFn: async () => (await axiosClient.get('/drivers', { params: { status: 'AVAILABLE' } })).data,
+    enabled: isCreateOpen || isSafetyOfficer,
   });
 
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<TripFormValues>({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm<TripFormValues>({
     resolver: zodResolver(tripSchema),
-    defaultValues: { source: '', destination: '', vehicleId: '', driverId: '', cargoWeight: 0, distance: 0 },
+    defaultValues: { source: '', destination: '', cargoWeight: 0, distance: 0 },
   });
 
   const { register: registerComplete, handleSubmit: handleSubmitComplete, reset: resetComplete, formState: { errors: errorsComplete } } = useForm<CompletionFormValues>({
@@ -79,28 +90,27 @@ export const Trips: React.FC = () => {
     defaultValues: { endOdometer: 0, fuelConsumed: 0 },
   });
 
-  const watchedVehicleId = useWatch({ control, name: 'vehicleId' });
-  const watchedCargoWeight = useWatch({ control, name: 'cargoWeight' }) || 0;
-  const [selectedVehicleDetails, setSelectedVehicleDetails] = useState<Vehicle | null>(null);
-
-  useEffect(() => {
-    if (watchedVehicleId && dispatchableVehicles) {
-      setSelectedVehicleDetails(dispatchableVehicles.find(v => v.id === watchedVehicleId) || null);
-    } else {
-      setSelectedVehicleDetails(null);
-    }
-  }, [watchedVehicleId, dispatchableVehicles]);
-
-  const isOverCapacity = !!(selectedVehicleDetails && watchedCargoWeight > selectedVehicleDetails.maxCapacity);
-
   const createTripMutation = useMutation({
-    mutationFn: (data: TripFormValues) => axiosClient.post('/trips', data),
+    mutationFn: (data: TripFormValues) => axiosClient.post('/trips', { ...data, plannedDistance: data.distance }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trips'] }); showToast('Trip created as DRAFT', 'success'); setIsCreateOpen(false); reset(); setBackendError(null); },
     onError: (error: any) => { const msg = error.response?.data?.message || 'Failed to create trip'; setBackendError(msg); showToast(msg, 'error'); },
   });
 
+  const updateTripMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { vehicleId?: number | null; driverId?: number | null } }) => axiosClient.put(`/trips/${id}`, data),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['trips'] });
+      showToast('Trip updated successfully', 'success');
+      setActiveTripDetails(res.data);
+    },
+    onError: (error: any) => showToast(error.response?.data?.message || 'Failed to update trip', 'error'),
+  });
+
   const dispatchMutation = useMutation({
-    mutationFn: (tripId: string) => axiosClient.post(`/trips/${tripId}/dispatch`),
+    mutationFn: (tripId: string) => axiosClient.post(`/trips/${tripId}/dispatch`, {
+      vehicleId: Number(activeTripDetails?.vehicleId),
+      driverId: Number(activeTripDetails?.driverId)
+    }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trips'] }); showToast('Trip dispatched', 'success'); setActiveTripDetails(null); },
     onError: (error: any) => showToast(error.response?.data?.message || 'Dispatch failed', 'error'),
   });
@@ -118,7 +128,6 @@ export const Trips: React.FC = () => {
   });
 
   const handleCreateSubmit = (data: TripFormValues) => {
-    if (isOverCapacity) { showToast('Cargo weight exceeds vehicle capacity!', 'error'); return; }
     createTripMutation.mutate(data);
   };
 
@@ -145,13 +154,13 @@ export const Trips: React.FC = () => {
       {/* Header */}
       <div className="page-header reveal reveal-1">
         <div>
-          <h1 className="page-title">Trips & Dispatches</h1>
-          <p className="page-subtitle">Schedule freight movements, dispatch drivers, and track route metrics</p>
+          <h1 className="page-title">Trips & Orders</h1>
+          <p className="page-subtitle">Add orders, assign fleet units and drivers, and track dispatches</p>
         </div>
-        {isFleetManager && (
+        {isBranchAdmin && (
           <button onClick={() => setIsCreateOpen(true)} className="btn btn-primary btn-md" style={{ flexShrink: 0 }}>
             <Plus size={14} strokeWidth={2} />
-            Create Trip
+            Add Order (Task)
           </button>
         )}
       </div>
@@ -179,7 +188,7 @@ export const Trips: React.FC = () => {
       ) : trips?.length === 0 ? (
         <div className="card" style={{ padding: 48, textAlign: 'center' }}>
           <Info size={28} strokeWidth={1.5} style={{ color: 'var(--text-muted)', margin: '0 auto 10px' }} />
-          <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-muted)' }}>No trips scheduled yet</p>
+          <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-muted)' }}>No orders or trips registered yet</p>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(290px, 1fr))', gap: 14 }}>
@@ -194,7 +203,7 @@ export const Trips: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <div>
                   <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    #{trip.tripNumber || trip.id.substring(0, 8)}
+                    Trip #{trip.id}
                   </span>
                   <h3 style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span>{trip.source}</span>
@@ -213,7 +222,7 @@ export const Trips: React.FC = () => {
                 </div>
                 <div>
                   <p style={{ margin: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Distance</p>
-                  <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{trip.distance.toLocaleString()} km</p>
+                  <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{trip.distance ? trip.distance.toLocaleString() : (trip as any).plannedDistance?.toLocaleString()} km</p>
                 </div>
               </div>
 
@@ -232,7 +241,7 @@ export const Trips: React.FC = () => {
         <div className="modal-overlay">
           <div className="modal-panel" style={{ width: '100%', maxWidth: 540 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 22px', borderBottom: '1px solid var(--border)' }}>
-              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Create Trip Plan</h3>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>Add New Order Task</h3>
               <button onClick={() => { setIsCreateOpen(false); setBackendError(null); }} className="btn btn-ghost btn-icon"><X size={16} strokeWidth={1.75} /></button>
             </div>
 
@@ -261,47 +270,22 @@ export const Trips: React.FC = () => {
                   </div>
                   {errors.destination && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.destination.message}</p>}
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Assign Vehicle</label>
-                  <select {...register('vehicleId')} style={inputStyle(!!errors.vehicleId)}>
-                    <option value="">Select dispatchable vehicle…</option>
-                    {dispatchableVehicles?.map(v => (
-                      <option key={v.id} value={v.id}>{v.registrationNumber} ({v.model}) — Max: {v.maxCapacity.toLocaleString()} kg</option>
-                    ))}
-                  </select>
-                  {errors.vehicleId && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.vehicleId.message}</p>}
-                </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label style={labelStyle}>Assign Driver</label>
-                  <select {...register('driverId')} style={inputStyle(!!errors.driverId)}>
-                    <option value="">Select dispatchable driver…</option>
-                    {dispatchableDrivers?.map(d => (
-                      <option key={d.id} value={d.id}>{d.name} ({d.licenseNumber})</option>
-                    ))}
-                  </select>
-                  {errors.driverId && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.driverId.message}</p>}
-                </div>
                 <div>
                   <label style={labelStyle}>Cargo Weight (kg)</label>
-                  <input type="number" {...register('cargoWeight', { valueAsNumber: true })} style={inputStyle(!!errors.cargoWeight || isOverCapacity)} />
-                  {selectedVehicleDetails && (
-                    <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 600, color: isOverCapacity ? '#f87171' : '#34d399' }}>
-                      Max: {selectedVehicleDetails.maxCapacity.toLocaleString()} kg — {isOverCapacity ? 'Exceeded!' : 'Safe'}
-                    </p>
-                  )}
+                  <input type="number" {...register('cargoWeight', { valueAsNumber: true })} style={inputStyle(!!errors.cargoWeight)} placeholder="e.g. 50" />
                   {errors.cargoWeight && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.cargoWeight.message}</p>}
                 </div>
                 <div>
-                  <label style={labelStyle}>Distance (km)</label>
-                  <input type="number" {...register('distance', { valueAsNumber: true })} style={inputStyle(!!errors.distance)} />
+                  <label style={labelStyle}>Planned Distance (km)</label>
+                  <input type="number" {...register('distance', { valueAsNumber: true })} style={inputStyle(!!errors.distance)} placeholder="e.g. 320" />
                   {errors.distance && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.distance.message}</p>}
                 </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                 <button type="button" onClick={() => { setIsCreateOpen(false); setBackendError(null); }} className="btn btn-ghost btn-md">Cancel</button>
-                <button type="submit" disabled={createTripMutation.isPending || isOverCapacity} className="btn btn-primary btn-md" style={{ opacity: isOverCapacity ? 0.5 : 1 }}>
-                  {createTripMutation.isPending ? 'Creating…' : 'Create Trip'}
+                <button type="submit" disabled={createTripMutation.isPending} className="btn btn-primary btn-md">
+                  {createTripMutation.isPending ? 'Creating…' : 'Add Order Task'}
                 </button>
               </div>
             </form>
@@ -334,7 +318,7 @@ export const Trips: React.FC = () => {
                   { label: 'Origin', value: activeTripDetails.source, icon: <MapPin size={13} strokeWidth={1.75} style={{ color: 'var(--color-interactive)' }} /> },
                   { label: 'Destination', value: activeTripDetails.destination, icon: <MapPin size={13} strokeWidth={1.75} style={{ color: 'var(--color-accent-h)' }} /> },
                   { label: 'Cargo Weight', value: `${activeTripDetails.cargoWeight.toLocaleString()} kg`, icon: <Weight size={13} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} /> },
-                  { label: 'Distance', value: `${activeTripDetails.distance.toLocaleString()} km`, icon: <Navigation size={13} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} /> },
+                  { label: 'Distance', value: `${(activeTripDetails.distance || (activeTripDetails as any).plannedDistance || 0).toLocaleString()} km`, icon: <Navigation size={13} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} /> },
                 ].map(item => (
                   <div key={item.label}>
                     <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>{item.label}</span>
@@ -344,6 +328,73 @@ export const Trips: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Assignment details / select boxes */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '16px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+                {/* Vehicle assignment */}
+                <div>
+                  <span style={labelStyle}>Assigned Vehicle</span>
+                  {activeTripDetails.vehicle ? (
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      🚛 {activeTripDetails.vehicle.registrationNumber}
+                    </div>
+                  ) : (
+                    <div>
+                      {isFleetManager && activeTripDetails.status === 'DRAFT' ? (
+                        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                          <select value={assignedVehicleId} onChange={e => setAssignedVehicleId(e.target.value)} style={inputStyle()}>
+                            <option value="">Select AVAILABLE Vehicle...</option>
+                            {dispatchableVehicles?.map(v => (
+                              <option key={v.id} value={v.id}>{v.registrationNumber} ({v.model}) - Max {v.maxCapacity}kg</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => updateTripMutation.mutate({ id: activeTripDetails.id, data: { vehicleId: Number(assignedVehicleId) } })}
+                            disabled={!assignedVehicleId || updateTripMutation.isPending}
+                            className="btn btn-primary btn-sm"
+                          >
+                            Assign
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#ffb84c', fontWeight: 500 }}>Awaiting Fleet Manager Assignment</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Driver assignment */}
+                <div>
+                  <span style={labelStyle}>Assigned Driver</span>
+                  {activeTripDetails.driver ? (
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>
+                      👤 {activeTripDetails.driver.name}
+                    </div>
+                  ) : (
+                    <div>
+                      {isSafetyOfficer && activeTripDetails.status === 'DRAFT' ? (
+                        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                          <select value={assignedDriverId} onChange={e => setAssignedDriverId(e.target.value)} style={inputStyle()}>
+                            <option value="">Select AVAILABLE Driver...</option>
+                            {dispatchableDrivers?.map(d => (
+                              <option key={d.id} value={d.id}>{d.name} ({d.licenseNumber})</option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => updateTripMutation.mutate({ id: activeTripDetails.id, data: { driverId: Number(assignedDriverId) } })}
+                            disabled={!assignedDriverId || updateTripMutation.isPending}
+                            className="btn btn-primary btn-sm"
+                          >
+                            Assign
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#ffb84c', fontWeight: 500 }}>Awaiting Safety Officer Assignment</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Completion stats */}
@@ -361,28 +412,31 @@ export const Trips: React.FC = () => {
               )}
 
               {/* Actions */}
-              {hasLifecycleAccess && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-                  {(activeTripDetails.status === 'DRAFT' || activeTripDetails.status === 'DISPATCHED') && isFleetManager && (
-                    <button onClick={() => cancelMutation.mutate(activeTripDetails.id)} disabled={cancelMutation.isPending} className="btn btn-danger btn-md">
-                      <XCircle size={13} strokeWidth={2} />
-                      Cancel Trip
-                    </button>
-                  )}
-                  {activeTripDetails.status === 'DRAFT' && isFleetManager && (
-                    <button onClick={() => dispatchMutation.mutate(activeTripDetails.id)} disabled={dispatchMutation.isPending} className="btn btn-primary btn-md">
-                      <Play size={13} strokeWidth={2} />
-                      {dispatchMutation.isPending ? 'Dispatching…' : 'Dispatch'}
-                    </button>
-                  )}
-                  {activeTripDetails.status === 'DISPATCHED' && (
-                    <button onClick={() => setIsCompleteOpen(true)} className="btn btn-md" style={{ backgroundColor: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }}>
-                      <CheckCircle size={13} strokeWidth={2} />
-                      Complete Trip
-                    </button>
-                  )}
-                </div>
-              )}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-end', paddingTop: 16 }}>
+                {(activeTripDetails.status === 'DRAFT' || activeTripDetails.status === 'DISPATCHED') && isDispatcher && (
+                  <button onClick={() => cancelMutation.mutate(activeTripDetails.id)} disabled={cancelMutation.isPending} className="btn btn-danger btn-md">
+                    <XCircle size={13} strokeWidth={2} />
+                    Cancel Trip
+                  </button>
+                )}
+                {activeTripDetails.status === 'DRAFT' && isDispatcher && (
+                  <button
+                    onClick={() => dispatchMutation.mutate(activeTripDetails.id)}
+                    disabled={dispatchMutation.isPending || !activeTripDetails.vehicle || !activeTripDetails.driver}
+                    className="btn btn-primary btn-md"
+                    title={(!activeTripDetails.vehicle || !activeTripDetails.driver) ? "A vehicle and driver must be assigned before dispatching" : ""}
+                  >
+                    <Play size={13} strokeWidth={2} />
+                    {dispatchMutation.isPending ? 'Dispatching…' : 'Dispatch'}
+                  </button>
+                )}
+                {activeTripDetails.status === 'DISPATCHED' && isDispatcher && (
+                  <button onClick={() => setIsCompleteOpen(true)} className="btn btn-md" style={{ backgroundColor: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }}>
+                    <CheckCircle size={13} strokeWidth={2} />
+                    Complete Trip
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

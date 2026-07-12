@@ -1,10 +1,11 @@
-export type UserRole = 'FLEET_MANAGER' | 'DRIVER' | 'SAFETY_OFFICER' | 'FINANCIAL_ANALYST';
+export type UserRole = 'SUPER_ADMIN' | 'BRANCH_ADMIN' | 'FLEET_MANAGER' | 'DISPATCHER' | 'SAFETY_OFFICER' | 'FINANCIAL_ANALYST';
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
+  branchId?: number | null;
 }
 
 export type VehicleStatus = 'AVAILABLE' | 'ON_TRIP' | 'IN_SHOP' | 'RETIRED';

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react"
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { useToast } from "../context/ToastContext"
-import { motion, AnimatePresence } from "framer-motion"
+import { motion } from "framer-motion"
 import { useQuery } from "@tanstack/react-query"
 import axiosClient from "../api/axiosClient"
 import {
@@ -19,7 +19,7 @@ import { cn } from "../lib/utils"
 // Animation
 // ──────────────────────────────────────────────
 const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } }
-const itemVariants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 26 } } }
+const itemVariants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 26 } } } as any
 
 // ──────────────────────────────────────────────
 // Chart mock data (replaced by Neon data for KPIs)
@@ -50,26 +50,6 @@ const aiInsights = [
   { title: "Fuel Efficiency Drop", description: "Vehicle #4022 showing 12% lower MPG than fleet average this week.", type: "warning" },
   { title: "Maintenance Prediction", description: "5 vehicles projected to need brake pads within 14 days.", type: "alert" },
 ]
-
-// ──────────────────────────────────────────────
-// Reusable Dropdown Menu
-// ──────────────────────────────────────────────
-function DropdownMenu({ items, className = "" }: { items: { label: string; icon?: any; onClick: () => void }[]; className?: string }) {
-  return (
-    <div className={cn("absolute right-0 top-10 w-44 bg-card border border-border rounded-xl shadow-2xl z-30 overflow-hidden animate-[modalIn_180ms_ease_forwards]", className)}>
-      {items.map(item => (
-        <button
-          key={item.label}
-          onClick={item.onClick}
-          className="w-full flex items-center gap-2.5 px-3.5 py-2.5 text-sm text-text-secondary hover:bg-background-secondary hover:text-text-primary transition-colors text-left"
-        >
-          {item.icon && <item.icon className="w-3.5 h-3.5 text-text-muted" />}
-          {item.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 // ──────────────────────────────────────────────
 // KPI Card
@@ -238,7 +218,6 @@ function ChartMenu({ onExport, onRefresh, onFullscreen }: { onExport: () => void
 // Dashboard Page
 // ──────────────────────────────────────────────
 export default function Dashboard() {
-  const navigate = useNavigate()
   const [dateRange, setDateRange] = useState("24h")
   const fleetData = utilizationByRange[dateRange] || utilizationByRange["24h"]
   const { showToast } = useToast() || { showToast: (m: string) => alert(m) }
@@ -257,9 +236,13 @@ export default function Dashboard() {
     staleTime: 30_000,
   })
 
-  const totalVehicles = kpis ? (Number(kpis.activeVehicles ?? 0) + Number(kpis.availableVehicles ?? 0) + Number(kpis.vehiclesInMaintenance ?? 0)) : null
-  const activeTrips    = kpis ? Number(kpis.activeTrips ?? 0) : null
-  const driversOnline  = kpis ? Number(kpis.driversOnDuty ?? 0) : null
+  const vehicles = kpis?.vehicles as any
+  const drivers = kpis?.drivers as any
+  const trips = kpis?.trips as any
+
+  const totalVehicles = Number(vehicles?.total ?? 0)
+  const activeTrips    = Number(trips?.active ?? 0)
+  const driversOnline  = Number(drivers?.on_trip ?? 0)
 
   const generateReport = () => {
     const rows = [
@@ -304,12 +287,12 @@ export default function Dashboard() {
 
       {/* ROW 1: KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <KpiCard title="Total Vehicles" value={totalVehicles !== null ? totalVehicles : "–"} icon={Truck} trend="+12%" trendUp colorClass="text-primary" />
-        <KpiCard title="Active Trips" value={activeTrips !== null ? activeTrips : "–"} icon={Route} trend="+5%" trendUp colorClass="text-info" />
-        <KpiCard title="Drivers Online" value={driversOnline !== null ? driversOnline : "–"} icon={Users} trend="-2%" trendUp={false} colorClass="text-text-primary" />
-        <KpiCard title="Fuel (Gal)" value={kpis?.totalFuel !== undefined ? kpis.totalFuel.toLocaleString() : "12,450"} icon={Fuel} trend="-8%" trendUp colorClass="text-warning" />
-        <KpiCard title="Revenue" value={kpis?.totalRevenue !== undefined ? `$${(kpis.totalRevenue >= 1000 ? (kpis.totalRevenue / 1000).toFixed(1) + 'K' : kpis.totalRevenue)}` : "$42.5K"} icon={DollarSign} trend="+14%" trendUp colorClass="text-success" />
-        <KpiCard title="Alerts" value={kpis?.alertsCount !== undefined ? kpis.alertsCount : "3"} icon={AlertTriangle} trend="+1" trendUp={false} colorClass="text-danger" />
+        <KpiCard title="Total Vehicles" value={totalVehicles || "–"} icon={Truck} trend="+12%" trendUp colorClass="text-primary" />
+        <KpiCard title="Active Trips" value={activeTrips || "–"} icon={Route} trend="+5%" trendUp colorClass="text-info" />
+        <KpiCard title="Drivers Online" value={driversOnline || "–"} icon={Users} trend="-2%" trendUp={false} colorClass="text-text-primary" />
+        <KpiCard title="Fuel (Gal)" value="12,450" icon={Fuel} trend="-8%" trendUp colorClass="text-warning" />
+        <KpiCard title="Revenue" value="$42.5K" icon={DollarSign} trend="+14%" trendUp colorClass="text-success" />
+        <KpiCard title="Alerts" value="3" icon={AlertTriangle} trend="+1" trendUp={false} colorClass="text-danger" />
       </div>
 
       {/* ROW 2: Charts */}

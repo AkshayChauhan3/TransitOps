@@ -18,6 +18,8 @@ import Reports from './pages/Reports';
 import ProfilePage from './pages/ProfilePage';
 import MyFleet from './pages/MyFleet';
 import Preferences from './pages/Preferences';
+import Branches from './pages/Branches';
+import Users from './pages/Users';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -51,6 +53,22 @@ export const App: React.FC = () => {
                 <Route path="vehicles" element={<Vehicles />} />
                 <Route path="drivers" element={<Drivers />} />
                 <Route path="trips" element={<Trips />} />
+                <Route
+                  path="branches"
+                  element={
+                    <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
+                      <Branches />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="users"
+                  element={
+                    <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'BRANCH_ADMIN']}>
+                      <Users />
+                    </ProtectedRoute>
+                  }
+                />
                 <Route
                   path="maintenance"
                   element={
