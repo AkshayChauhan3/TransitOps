@@ -79,7 +79,7 @@ export const createTripSchema = z.object({
   plannedDistance: z.coerce.number().positive("Planned distance must be positive"),
   vehicleId: z.coerce.number().int().positive("Invalid vehicle ID").optional(),
   driverId: z.coerce.number().int().positive("Invalid driver ID").optional(),
-  branchId: z.coerce.number().int().positive("Invalid branch ID"),
+  branchId: z.coerce.number().int().positive("Invalid branch ID").optional(),
 });
 
 export const updateTripSchema = createTripSchema.partial();

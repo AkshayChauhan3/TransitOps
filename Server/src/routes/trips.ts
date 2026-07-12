@@ -33,11 +33,22 @@ router.get('/', requirePermission('trips', 'view'), async (req, res, next) => {
 
 router.post('/', requirePermission('trips', 'create'), validate(createTripSchema), async (req, res, next) => {
   try {
-    const branchId = req.user!.role === 'SUPER_ADMIN' ? req.body.branchId : req.user!.branchId!;
+    const resolvedBranchId = req.user!.role === 'SUPER_ADMIN' ? req.body.branchId : req.user!.branchId;
+    if (!resolvedBranchId) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Branch ID is required' } });
+    }
+
+    const { source, destination, cargoWeight, plannedDistance, vehicleId, driverId } = req.body;
+
     const trip = await prisma.trip.create({
       data: {
-        ...req.body,
-        branchId,
+        source,
+        destination,
+        cargoWeight: Number(cargoWeight),
+        plannedDistance: Number(plannedDistance),
+        vehicleId: vehicleId ? Number(vehicleId) : null,
+        driverId: driverId ? Number(driverId) : null,
+        branchId: Number(resolvedBranchId),
         createdById: req.user!.userId,
         status: 'DRAFT'
       }
