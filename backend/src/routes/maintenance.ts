@@ -60,7 +60,7 @@ router.post('/:id/close', requirePermission('fleet', 'update'), validate(closeMa
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
 
     const result = await prisma.$transaction(async (tx) => {
-      const log = await tx.maintenanceLog.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null } });
+      const log = await tx.maintenanceLog.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null } });
       if (!log) throw { statusCode: 404, message: 'Maintenance record not found' };
       if (log.status === 'COMPLETED') throw { statusCode: 400, message: 'Already closed' };
 
@@ -89,7 +89,7 @@ router.post('/:id/close', requirePermission('fleet', 'update'), validate(closeMa
 router.delete('/:id', requirePermission('fleet', 'delete'), async (req, res, next) => {
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const log = await prisma.maintenanceLog.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null }});
+    const log = await prisma.maintenanceLog.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null }});
     if (!log) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Record not found' } });
 
     await prisma.maintenanceLog.update({

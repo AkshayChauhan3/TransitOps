@@ -53,7 +53,7 @@ router.post('/:id/dispatch', requirePermission('trips', 'update'), async (req, r
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
     
     const result = await prisma.$transaction(async (tx) => {
-      const trip = await tx.trip.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null } });
+      const trip = await tx.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null } });
       if (!trip) throw { statusCode: 404, message: 'Trip not found' };
       if (trip.status !== 'DRAFT') throw { statusCode: 400, message: 'Only DRAFT trips can be dispatched' };
       if (!trip.vehicleId || !trip.driverId) throw { statusCode: 400, message: 'Vehicle and Driver must be assigned' };
@@ -90,7 +90,7 @@ router.post('/:id/complete', requirePermission('trips', 'update'), validate(comp
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
 
     const result = await prisma.$transaction(async (tx) => {
-      const trip = await tx.trip.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null } });
+      const trip = await tx.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null } });
       if (!trip) throw { statusCode: 404, message: 'Trip not found' };
       if (trip.status !== 'DISPATCHED') throw { statusCode: 400, message: 'Only DISPATCHED trips can be completed' };
       
@@ -134,7 +134,7 @@ router.post('/:id/cancel', requirePermission('trips', 'update'), async (req, res
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
     
     const result = await prisma.$transaction(async (tx) => {
-      const trip = await tx.trip.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null } });
+      const trip = await tx.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null } });
       if (!trip) throw { statusCode: 404, message: 'Trip not found' };
       if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED') throw { statusCode: 400, message: `Cannot cancel a ${trip.status} trip` };
 

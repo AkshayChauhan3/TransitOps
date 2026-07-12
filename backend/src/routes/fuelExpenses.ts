@@ -84,7 +84,7 @@ router.post('/expenses', requirePermission('finance', 'create'), validate(create
 
 router.get('/vehicles/:id/operational-cost', requirePermission('finance', 'view'), async (req, res, next) => {
   try {
-    const vehicleId = req.params.id;
+    const vehicleId = req.params.id as string;
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
 
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId, ...branchFilter, deletedAt: null } });
@@ -96,9 +96,9 @@ router.get('/vehicles/:id/operational-cost', requirePermission('finance', 'view'
       prisma.expense.aggregate({ where: { vehicleId, deletedAt: null }, _sum: { amount: true } })
     ]);
 
-    const totalFuel = fuelCost._sum.cost || 0;
-    const totalMaintenance = maintenanceCost._sum.cost || 0;
-    const totalExpenses = expensesCost._sum.amount || 0;
+    const totalFuel = fuelCost._sum?.cost || 0;
+    const totalMaintenance = maintenanceCost._sum?.cost || 0;
+    const totalExpenses = expensesCost._sum?.amount || 0;
 
     res.json({
       vehicleId,

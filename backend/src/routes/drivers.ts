@@ -27,7 +27,7 @@ router.get('/:id', requirePermission('drivers', 'view'), async (req, res, next) 
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
     const driver = await prisma.driver.findFirst({
-      where: { id: req.params.id, ...branchFilter, deletedAt: null },
+      where: { id: req.params.id as string, ...branchFilter, deletedAt: null },
       include: {
         trips: { where: { deletedAt: null }, take: 5, orderBy: { createdAt: 'desc' } }
       }
@@ -60,7 +60,7 @@ router.post('/', requirePermission('drivers', 'create'), validate(createDriverSc
 router.put('/:id', requirePermission('drivers', 'update'), validate(updateDriverSchema), async (req, res, next) => {
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const driver = await prisma.driver.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null }});
+    const driver = await prisma.driver.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null }});
     if (!driver) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Driver not found' } });
 
     const updateData = { ...req.body };
@@ -80,7 +80,7 @@ router.put('/:id', requirePermission('drivers', 'update'), validate(updateDriver
 router.delete('/:id', requirePermission('drivers', 'delete'), async (req, res, next) => {
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const driver = await prisma.driver.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null }});
+    const driver = await prisma.driver.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null }});
     if (!driver) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Driver not found' } });
 
     await prisma.driver.update({

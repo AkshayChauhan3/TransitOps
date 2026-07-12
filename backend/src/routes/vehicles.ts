@@ -27,7 +27,7 @@ router.get('/:id', requirePermission('fleet', 'view'), async (req, res, next) =>
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
     const vehicle = await prisma.vehicle.findFirst({
-      where: { id: req.params.id, ...branchFilter, deletedAt: null },
+      where: { id: req.params.id as string, ...branchFilter, deletedAt: null },
       include: {
         trips: { 
           where: { deletedAt: null },
@@ -60,7 +60,7 @@ router.post('/', requirePermission('fleet', 'create'), validate(createVehicleSch
 router.put('/:id', requirePermission('fleet', 'update'), validate(updateVehicleSchema), async (req, res, next) => {
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null }});
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null }});
     if (!vehicle) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Vehicle not found' } });
 
     const updated = await prisma.vehicle.update({
@@ -77,7 +77,7 @@ router.put('/:id', requirePermission('fleet', 'update'), validate(updateVehicleS
 router.delete('/:id', requirePermission('fleet', 'delete'), async (req, res, next) => {
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null }});
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null }});
     if (!vehicle) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Vehicle not found' } });
 
     await prisma.vehicle.update({
