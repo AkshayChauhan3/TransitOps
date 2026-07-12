@@ -14,8 +14,8 @@ import {
   Menu, 
   X,
   ChevronDown,
-  
-  
+  ChevronsRight,
+  ChevronsLeft,
   Sun,
   Moon,
   Monitor
@@ -37,8 +37,6 @@ export const Layout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [themeDropdownOpen, setThemeDropdownOpen] = useState(false);
-  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const handleLogout = () => {
     logout();
@@ -46,13 +44,13 @@ export const Layout: React.FC = () => {
   };
 
   const menuItems: MenuItem[] = [
-    { name: 'Dashboard',      path: '/',           icon: <LayoutDashboard size={17} strokeWidth={1.75} />, roles: ['FLEET_MANAGER', 'DRIVER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST'] },
-    { name: 'Vehicles',       path: '/vehicles',   icon: <Truck size={17} strokeWidth={1.75} />,           roles: ['FLEET_MANAGER', 'DRIVER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST'] },
-    { name: 'Drivers',        path: '/drivers',    icon: <Users size={17} strokeWidth={1.75} />,           roles: ['FLEET_MANAGER', 'DRIVER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST'] },
-    { name: 'Trips',          path: '/trips',      icon: <Route size={17} strokeWidth={1.75} />,           roles: ['FLEET_MANAGER', 'DRIVER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST'] },
-    { name: 'Maintenance',    path: '/maintenance',icon: <Wrench size={17} strokeWidth={1.75} />,          roles: ['FLEET_MANAGER'] },
-    { name: 'Fuel & Expenses',path: '/expenses',   icon: <Flame size={17} strokeWidth={1.75} />,           roles: ['FLEET_MANAGER', 'FINANCIAL_ANALYST'] },
-    { name: 'Reports',        path: '/reports',    icon: <FileText size={17} strokeWidth={1.75} />,        roles: ['FLEET_MANAGER', 'FINANCIAL_ANALYST'] },
+    { name: 'Dashboard',      path: '/',           icon: <LayoutDashboard size={17} strokeWidth={1.75} />, roles: ['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER', 'DISPATCHER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST'] },
+    { name: 'Vehicles',       path: '/vehicles',   icon: <Truck size={17} strokeWidth={1.75} />,           roles: ['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER', 'DISPATCHER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST'] },
+    { name: 'Drivers',        path: '/drivers',    icon: <Users size={17} strokeWidth={1.75} />,           roles: ['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER', 'DISPATCHER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST'] },
+    { name: 'Trips',          path: '/trips',      icon: <Route size={17} strokeWidth={1.75} />,           roles: ['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER', 'DISPATCHER', 'SAFETY_OFFICER', 'FINANCIAL_ANALYST'] },
+    { name: 'Maintenance',    path: '/maintenance',icon: <Wrench size={17} strokeWidth={1.75} />,          roles: ['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER'] },
+    { name: 'Fuel & Expenses',path: '/expenses',   icon: <Flame size={17} strokeWidth={1.75} />,           roles: ['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER', 'FINANCIAL_ANALYST'] },
+    { name: 'Reports',        path: '/reports',    icon: <FileText size={17} strokeWidth={1.75} />,        roles: ['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER', 'FINANCIAL_ANALYST'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item =>
@@ -235,7 +233,36 @@ export const Layout: React.FC = () => {
           gap: 4,
           flexShrink: 0,
         }}>
-          {/* Removed collapse button as requested */}
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="hidden lg:flex"
+            style={{
+              alignItems: 'center',
+              justifyContent: isCollapsed ? 'center' : 'flex-start',
+              gap: 10,
+              padding: isCollapsed ? '9px' : '9px 12px',
+              borderRadius: 10,
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--color-text-mut)',
+              fontSize: 12,
+              fontWeight: 500,
+              cursor: 'pointer',
+              width: '100%',
+              transition: 'background-color 160ms, color 160ms',
+            }}
+            onMouseEnter={e => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-surface-2)';
+              (e.currentTarget as HTMLElement).style.color = 'var(--color-text-sec)';
+            }}
+            onMouseLeave={e => {
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+              (e.currentTarget as HTMLElement).style.color = 'var(--color-text-mut)';
+            }}
+          >
+            {isCollapsed ? <ChevronsRight size={16} strokeWidth={1.75} /> : <ChevronsLeft size={16} strokeWidth={1.75} />}
+            {!isCollapsed && <span>Collapse</span>}
+          </button>
 
           <button
             onClick={handleLogout}
@@ -279,71 +306,20 @@ export const Layout: React.FC = () => {
           borderBottom: '1px solid var(--color-border)',
           flexShrink: 0,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            {/* Mobile menu toggle */}
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden"
-              style={{ color: 'var(--color-text-mut)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
-            >
-              <Menu size={20} strokeWidth={1.75} />
-            </button>
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="lg:hidden"
+            style={{ color: 'var(--color-text-mut)', background: 'none', border: 'none', cursor: 'pointer', padding: 4 }}
+          >
+            <Menu size={20} strokeWidth={1.75} />
+          </button>
 
-            {/* Desktop menu toggle (Hamburger) */}
-            <button
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="hidden lg:flex"
-              style={{ color: 'var(--color-text-mut)', background: 'none', border: 'none', cursor: 'pointer', padding: 4, marginRight: 8 }}
-            >
-              <Menu size={18} strokeWidth={1.75} />
-            </button>
-
-            {/* Breadcrumb label */}
-            <span className="hidden lg:block" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-mut)' }}>
-              Operations
-            </span>
-          </div>
+          {/* Breadcrumb label */}
+          <span className="hidden lg:block" style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--color-text-mut)' }}>
+            Operations
+          </span>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginLeft: 'auto' }}>
-            
-            {/* Search Bar */}
-            <div style={{ position: 'relative', marginRight: 8 }} className="hidden sm:block">
-              <input 
-                type="text" 
-                placeholder="Search..." 
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                style={{
-                  backgroundColor: 'var(--color-surface-2)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: 8,
-                  padding: '5px 12px',
-                  fontSize: 12,
-                  color: 'var(--color-text-pri)',
-                  outline: 'none',
-                  width: 180
-                }}
-              />
-            </div>
-
-            {/* Notifications */}
-            <button
-              onClick={() => { /* Placeholder for notifications toggle */ }}
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                width: 32, height: 32, borderRadius: 8,
-                backgroundColor: 'transparent',
-                border: 'none',
-                color: 'var(--color-text-sec)',
-                cursor: 'pointer', outline: 'none',
-                transition: 'background-color 120ms',
-                marginRight: 4
-              }}
-              onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-surface-2)'; }}
-              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>
-            </button>
 
             {/* Theme toggle */}
             <div style={{ position: 'relative' }}>
@@ -405,89 +381,25 @@ export const Layout: React.FC = () => {
 
             {/* User pill */}
             {user && (
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={() => setUserDropdownOpen(!userDropdownOpen)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8,
-                    backgroundColor: 'var(--color-surface-2)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 8, padding: '5px 10px 5px 6px',
-                    cursor: 'pointer', outline: 'none'
-                  }}
-                >
-                  <div style={{
-                    width: 24, height: 24, borderRadius: '50%',
-                    backgroundColor: 'rgba(75,99,130,0.3)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, fontWeight: 700, color: 'var(--color-accent-h)',
-                    border: '1px solid rgba(75,99,130,0.25)',
-                  }}>
-                    {getInitials(user.name)}
-                  </div>
-                  <div className="hidden sm:block" style={{ textAlign: 'left' }}>
-                    <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--color-text-pri)', lineHeight: 1.2 }}>{user.name}</p>
-                    <p style={{ margin: 0, fontSize: 10, color: 'var(--color-text-mut)', lineHeight: 1.2 }}>{formatRole(user.role)}</p>
-                  </div>
-                  <ChevronDown size={12} style={{ color: 'var(--color-text-mut)', marginLeft: 4 }} />
-                </button>
-
-                {userDropdownOpen && (
-                  <>
-                    <div style={{ position: 'fixed', inset: 0, zIndex: 10 }} onClick={() => setUserDropdownOpen(false)} />
-                    <div style={{
-                      position: 'absolute', right: 0, top: 'calc(100% + 6px)',
-                      width: 160,
-                      backgroundColor: 'var(--color-surface)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: 12,
-                      padding: '6px',
-                      boxShadow: '0 8px 30px var(--color-shadow)',
-                      zIndex: 20,
-                      animation: 'modalIn 200ms cubic-bezier(0.16,1,0.3,1) both',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 2
-                    }}>
-                      {['My Profile', 'My Fleet', 'Preferences'].map(label => (
-                        <button
-                          key={label}
-                          onClick={() => { setUserDropdownOpen(false); /* placeholder for routing */ }}
-                          style={{
-                            display: 'flex', alignItems: 'center',
-                            width: '100%', padding: '7px 10px',
-                            borderRadius: 8, border: 'none',
-                            backgroundColor: 'transparent',
-                            color: 'var(--color-text-sec)',
-                            fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                            textAlign: 'left'
-                          }}
-                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--color-surface-2)'; }}
-                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                      <div style={{ height: 1, backgroundColor: 'var(--color-border)', margin: '4px 0' }} />
-                      <button
-                        onClick={() => { setUserDropdownOpen(false); handleLogout(); }}
-                        style={{
-                          display: 'flex', alignItems: 'center',
-                          width: '100%', padding: '7px 10px',
-                          borderRadius: 8, border: 'none',
-                          backgroundColor: 'transparent',
-                          color: '#f87171',
-                          fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                          textAlign: 'left'
-                        }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(239,68,68,0.08)'; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent'; }}
-                      >
-                        Sign Out
-                      </button>
-                    </div>
-                  </>
-                )}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                backgroundColor: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 8, padding: '5px 10px 5px 6px',
+              }}>
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%',
+                  backgroundColor: 'rgba(75,99,130,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 10, fontWeight: 700, color: 'var(--color-accent-h)',
+                  border: '1px solid rgba(75,99,130,0.25)',
+                }}>
+                  {getInitials(user.name)}
+                </div>
+                <div className="hidden sm:block">
+                  <p style={{ margin: 0, fontSize: 12, fontWeight: 600, color: 'var(--color-text-pri)', lineHeight: 1.2 }}>{user.name}</p>
+                  <p style={{ margin: 0, fontSize: 10, color: 'var(--color-text-mut)', lineHeight: 1.2 }}>{formatRole(user.role)}</p>
+                </div>
               </div>
             )}
           </div>

@@ -1,111 +1,215 @@
-export type UserRole = 'FLEET_MANAGER' | 'DRIVER' | 'SAFETY_OFFICER' | 'FINANCIAL_ANALYST';
+// ─────────────────────────────────────────────
+// ENUMS  (mirror prisma/schema.prisma exactly)
+// ─────────────────────────────────────────────
 
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-}
+export type UserRole =
+  | 'SUPER_ADMIN'
+  | 'BRANCH_ADMIN'
+  | 'FLEET_MANAGER'
+  | 'DISPATCHER'
+  | 'SAFETY_OFFICER'
+  | 'FINANCIAL_ANALYST';
 
 export type VehicleStatus = 'AVAILABLE' | 'ON_TRIP' | 'IN_SHOP' | 'RETIRED';
 
-export interface Vehicle {
-  id: string;
-  registrationNumber: string;
-  model: string;
-  type: string;
-  status: VehicleStatus;
-  region: string;
-  dispatchable: boolean;
-  maxCapacity: number; // in kg
-}
-
 export type DriverStatus = 'AVAILABLE' | 'ON_TRIP' | 'OFF_DUTY' | 'SUSPENDED';
-
-export interface Driver {
-  id: string;
-  name: string;
-  email: string;
-  licenseNumber: string;
-  licenseExpiry: string; // ISO date string
-  status: DriverStatus;
-  dispatchable: boolean;
-}
 
 export type TripStatus = 'DRAFT' | 'DISPATCHED' | 'COMPLETED' | 'CANCELLED';
 
+export type MaintenanceStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+
+export type ExpenseType = 'TOLL' | 'OTHER';
+
+// ─────────────────────────────────────────────
+// MODELS  (id: number — Int autoincrement in DB)
+// ─────────────────────────────────────────────
+
+export interface Branch {
+  id: number;
+  name: string;
+  address: string;
+  city: string;
+  state: string;
+  contactNumber: string;
+  adminId: number | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  role: UserRole;
+  branchId: number | null;
+  failedLoginAttempts: number;
+  lockedUntil: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface Vehicle {
+  id: number;
+  registrationNumber: string;
+  name: string;
+  model: string;
+  type: string;
+  maxLoadCapacity: number;
+  odometer: number;
+  acquisitionCost: number;
+  status: VehicleStatus;
+  branchId: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface Driver {
+  id: number;
+  name: string;
+  licenseNumber: string;
+  licenseCategory: string;
+  licenseExpiryDate: string; // ISO date string
+  contactNumber: string;
+  safetyScore: number;
+  status: DriverStatus;
+  branchId: number;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
 export interface Trip {
-  id: string;
-  tripNumber: string;
+  id: number;
   source: string;
   destination: string;
-  vehicleId: string;
-  vehicle?: Vehicle;
-  driverId: string;
-  driver?: Driver;
-  cargoWeight: number; // in kg
-  distance: number; // in km
+  vehicleId: number | null;
+  vehicle?: Pick<Vehicle, 'registrationNumber' | 'odometer'>;
+  driverId: number | null;
+  driver?: Pick<Driver, 'name'>;
+  branchId: number;
+  createdById: number;
+  cargoWeight: number;
+  plannedDistance: number;
+  actualDistance: number | null;
+  finalOdometer: number | null;
+  revenue: number | null;
   status: TripStatus;
-  startOdometer?: number;
-  endOdometer?: number;
-  fuelConsumed?: number; // in liters
+  dispatchedAt: string | null;
+  completedAt: string | null;
   createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 }
 
 export interface MaintenanceLog {
-  id: string;
-  vehicleId: string;
+  id: number;
+  vehicleId: number;
   vehicle?: Vehicle;
-  description: string;
+  branchId: number;
+  serviceType: string;
+  description: string | null;
   cost: number;
-  status: 'ACTIVE' | 'CLOSED';
-  startDate: string;
-  endDate?: string;
+  date: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  technicianName: string | null;
+  status: MaintenanceStatus;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 }
 
 export interface FuelLog {
-  id: string;
-  vehicleId: string;
-  vehicle?: Vehicle;
+  id: number;
+  vehicleId: number;
+  vehicle?: Pick<Vehicle, 'registrationNumber' | 'branchId'>;
+  tripId: number | null;
   liters: number;
   cost: number;
   date: string;
-  tripId?: string;
+  fuelStation: string | null;
+  receiptNo: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 }
 
 export interface Expense {
-  id: string;
-  vehicleId: string;
+  id: number;
+  vehicleId: number;
   vehicle?: Vehicle;
-  type: 'TOLL' | 'MAINTENANCE' | 'OTHER';
+  tripId: number | null;
+  type: ExpenseType;
   amount: number;
   date: string;
-  description: string;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
 }
 
-export interface DashboardMetrics {
-  activeVehicles: number;
-  availableVehicles: number;
-  vehiclesInMaintenance: number;
-  activeTrips: number;
-  pendingTrips: number;
-  driversOnDuty: number;
-  fleetUtilizationPercent: number;
+// ─────────────────────────────────────────────
+// DASHBOARD  (mirrors GET /api/dashboard/kpis)
+// ─────────────────────────────────────────────
+
+export interface DashboardKPIs {
+  fleet: {
+    total: number;
+    active: number;
+    inMaintenance: number;
+    utilizationPercentage: number;
+  };
+  trips: {
+    active: number;
+    pending: number;
+  };
+  drivers: {
+    onDuty: number;
+  };
 }
+
+export interface DashboardAlerts {
+  expiringLicenses: Array<Pick<Driver, 'id' | 'name' | 'licenseExpiryDate'>>;
+  overdueMaintenance: Array<
+    MaintenanceLog & { vehicle: Pick<Vehicle, 'registrationNumber'> }
+  >;
+  lockedAccounts: Array<Pick<User, 'id' | 'email' | 'name' | 'lockedUntil'>>;
+}
+
+// ─────────────────────────────────────────────
+// REPORTS  (mirrors GET /api/reports/*)
+// ─────────────────────────────────────────────
 
 export interface OperationalCostSummary {
-  fuelCost: number;
-  maintenanceCost: number;
-  otherCost: number;
-  totalCost: number;
+  vehicleId: number;
+  breakdown: {
+    fuel: number;
+    maintenance: number;
+    otherExpenses: number;
+  };
+  totalOperationalCost: number;
 }
 
 export interface VehicleReportItem {
-  id: string;
+  id: number;
   registrationNumber: string;
   model: string;
-  fuelEfficiency: number; // km per liter or similar
+  fuelEfficiency: number;
   fleetUtilizationPercent: number;
   operationalCost: number;
-  roi: number; // return on investment metric
+  roi: number;
 }
+
+// ─────────────────────────────────────────────
+// AUTH  (mirrors POST /api/auth/login response)
+// ─────────────────────────────────────────────
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+}
+
+export interface AuthUser extends Pick<User, 'id' | 'name' | 'email' | 'role' | 'branchId'> {}

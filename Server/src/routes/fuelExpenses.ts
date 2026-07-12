@@ -15,8 +15,8 @@ router.get('/fuel-logs', requirePermission('finance', 'view'), async (req, res, 
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { vehicle: { branchId: req.user!.branchId! } }; 
     
     const where: any = { ...branchFilter, deletedAt: null };
-    if (vehicleId) where.vehicleId = String(vehicleId);
-    if (tripId) where.tripId = String(tripId);
+    if (vehicleId) where.vehicleId = parseInt(vehicleId as string);
+    if (tripId) where.tripId = parseInt(tripId as string);
 
     const logs = await prisma.fuelLog.findMany({
       where,
@@ -52,8 +52,8 @@ router.get('/expenses', requirePermission('finance', 'view'), async (req, res, n
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { vehicle: { branchId: req.user!.branchId! } };
     
     const where: any = { ...branchFilter, deletedAt: null };
-    if (vehicleId) where.vehicleId = String(vehicleId);
-    if (tripId) where.tripId = String(tripId);
+    if (vehicleId) where.vehicleId = parseInt(vehicleId as string);
+    if (tripId) where.tripId = parseInt(tripId as string);
     if (type) where.type = String(type);
 
     const expenses = await prisma.expense.findMany({
@@ -84,7 +84,7 @@ router.post('/expenses', requirePermission('finance', 'create'), validate(create
 
 router.get('/vehicles/:id/operational-cost', requirePermission('finance', 'view'), async (req, res, next) => {
   try {
-    const vehicleId = parseInt(req.params.id as string, 10);
+    const vehicleId = parseInt(req.params.id as string);
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
 
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId, ...branchFilter, deletedAt: null } });
@@ -95,6 +95,7 @@ router.get('/vehicles/:id/operational-cost', requirePermission('finance', 'view'
       prisma.maintenanceLog.aggregate({ where: { vehicleId, deletedAt: null }, _sum: { cost: true } }),
       prisma.expense.aggregate({ where: { vehicleId, deletedAt: null }, _sum: { amount: true } })
     ]);
+
 
     const totalFuel = fuelCost._sum?.cost || 0;
     const totalMaintenance = maintenanceCost._sum?.cost || 0;

@@ -13,15 +13,16 @@ import { Plus, MapPin, Weight, Navigation, Info, Clock, Filter, CheckCircle, XCi
 const tripSchema = z.object({
   source: z.string().min(2, 'Source is required'),
   destination: z.string().min(2, 'Destination is required'),
-  vehicleId: z.string().min(1, 'Vehicle is required'),
-  driverId: z.string().min(1, 'Driver is required'),
+  vehicleId: z.coerce.number().int().positive('Vehicle is required'),
+  driverId: z.coerce.number().int().positive('Driver is required'),
   cargoWeight: z.number().positive('Cargo weight must be positive'),
-  distance: z.number().positive('Distance must be positive'),
+  plannedDistance: z.number().positive('Planned distance must be positive'),
 });
 
 const completionSchema = z.object({
-  endOdometer: z.number().positive('Odometer reading must be positive'),
-  fuelConsumed: z.number().positive('Fuel consumed must be positive'),
+  finalOdometer: z.number().positive('Odometer reading must be positive'),
+  actualDistance: z.number().positive('Actual distance must be positive'),
+  revenue: z.number().nonnegative('Revenue cannot be negative'),
 });
 
 type TripFormValues = z.infer<typeof tripSchema>;
@@ -48,35 +49,35 @@ export const Trips: React.FC = () => {
   const [isCompleteOpen, setIsCompleteOpen] = useState(false);
   const [backendError, setBackendError] = useState<string | null>(null);
 
-  const isFleetManager = user?.role === 'FLEET_MANAGER';
-  const isDriver = user?.role === 'DRIVER';
-  const hasLifecycleAccess = isFleetManager || isDriver;
+  const isFleetManager = user?.role === 'FLEET_MANAGER' || user?.role === 'SUPER_ADMIN' || user?.role === 'BRANCH_ADMIN';
+  const isDispatcher = user?.role === 'DISPATCHER';
+  const hasLifecycleAccess = isFleetManager || isDispatcher;
 
   const { data: trips, isLoading: tripsLoading } = useQuery<Trip[]>({
     queryKey: ['trips', filterStatus],
     queryFn: async () => (await axiosClient.get('/trips', { params: { status: filterStatus || undefined } })).data,
   });
 
-  const { data: dispatchableVehicles } = useQuery<Vehicle[]>({
-    queryKey: ['vehicles', 'dispatchable'],
-    queryFn: async () => (await axiosClient.get('/vehicles', { params: { dispatchable: true } })).data,
+  const { data: availableVehicles } = useQuery<Vehicle[]>({
+    queryKey: ['vehicles', 'available'],
+    queryFn: async () => (await axiosClient.get('/vehicles', { params: { status: 'AVAILABLE' } })).data,
     enabled: isCreateOpen,
   });
 
-  const { data: dispatchableDrivers } = useQuery<Driver[]>({
-    queryKey: ['drivers', 'dispatchable'],
-    queryFn: async () => (await axiosClient.get('/drivers', { params: { dispatchable: true } })).data,
+  const { data: availableDrivers } = useQuery<Driver[]>({
+    queryKey: ['drivers', 'available'],
+    queryFn: async () => (await axiosClient.get('/drivers', { params: { status: 'AVAILABLE' } })).data,
     enabled: isCreateOpen,
   });
 
   const { register, handleSubmit, control, reset, formState: { errors } } = useForm<TripFormValues>({
-    resolver: zodResolver(tripSchema),
-    defaultValues: { source: '', destination: '', vehicleId: '', driverId: '', cargoWeight: 0, distance: 0 },
+    resolver: zodResolver(tripSchema) as any,
+    defaultValues: { source: '', destination: '', vehicleId: 0, driverId: 0, cargoWeight: 0, plannedDistance: 0 },
   });
 
   const { register: registerComplete, handleSubmit: handleSubmitComplete, reset: resetComplete, formState: { errors: errorsComplete } } = useForm<CompletionFormValues>({
-    resolver: zodResolver(completionSchema),
-    defaultValues: { endOdometer: 0, fuelConsumed: 0 },
+    resolver: zodResolver(completionSchema) as any,
+    defaultValues: { finalOdometer: 0, actualDistance: 0, revenue: 0 },
   });
 
   const watchedVehicleId = useWatch({ control, name: 'vehicleId' });
@@ -84,37 +85,69 @@ export const Trips: React.FC = () => {
   const [selectedVehicleDetails, setSelectedVehicleDetails] = useState<Vehicle | null>(null);
 
   useEffect(() => {
-    if (watchedVehicleId && dispatchableVehicles) {
-      setSelectedVehicleDetails(dispatchableVehicles.find(v => v.id === watchedVehicleId) || null);
+    if (watchedVehicleId && availableVehicles) {
+      setSelectedVehicleDetails(availableVehicles.find(v => v.id === Number(watchedVehicleId)) || null);
     } else {
       setSelectedVehicleDetails(null);
     }
-  }, [watchedVehicleId, dispatchableVehicles]);
+  }, [watchedVehicleId, availableVehicles]);
 
-  const isOverCapacity = !!(selectedVehicleDetails && watchedCargoWeight > selectedVehicleDetails.maxCapacity);
+  const isOverCapacity = !!(selectedVehicleDetails && watchedCargoWeight > selectedVehicleDetails.maxLoadCapacity);
 
   const createTripMutation = useMutation({
     mutationFn: (data: TripFormValues) => axiosClient.post('/trips', data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trips'] }); showToast('Trip created as DRAFT', 'success'); setIsCreateOpen(false); reset(); setBackendError(null); },
-    onError: (error: any) => { const msg = error.response?.data?.message || 'Failed to create trip'; setBackendError(msg); showToast(msg, 'error'); },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['trips'] }); 
+      showToast('Trip created as DRAFT', 'success'); 
+      setIsCreateOpen(false); 
+      reset(); 
+      setBackendError(null); 
+    },
+    onError: (error: any) => { 
+      const msg = error.response?.data?.error?.message || error.response?.data?.message || 'Failed to create trip'; 
+      setBackendError(msg); 
+      showToast(msg, 'error'); 
+    },
   });
 
   const dispatchMutation = useMutation({
-    mutationFn: (tripId: string) => axiosClient.post(`/trips/${tripId}/dispatch`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trips'] }); showToast('Trip dispatched', 'success'); setActiveTripDetails(null); },
-    onError: (error: any) => showToast(error.response?.data?.message || 'Dispatch failed', 'error'),
+    mutationFn: (trip: Trip) => axiosClient.post(`/trips/${trip.id}/dispatch`, {
+      vehicleId: trip.vehicleId,
+      driverId: trip.driverId
+    }),
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['trips'] }); 
+      showToast('Trip dispatched', 'success'); 
+      setActiveTripDetails(null); 
+    },
+    onError: (error: any) => showToast(error.response?.data?.error?.message || error.response?.data?.message || 'Dispatch failed', 'error'),
   });
 
   const cancelMutation = useMutation({
-    mutationFn: (tripId: string) => axiosClient.post(`/trips/${tripId}/cancel`),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trips'] }); showToast('Trip cancelled', 'success'); setActiveTripDetails(null); },
-    onError: (error: any) => showToast(error.response?.data?.message || 'Cancellation failed', 'error'),
+    mutationFn: (tripId: number) => axiosClient.post(`/trips/${tripId}/cancel`),
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['trips'] }); 
+      showToast('Trip cancelled', 'success'); 
+      setActiveTripDetails(null); 
+    },
+    onError: (error: any) => showToast(error.response?.data?.error?.message || error.response?.data?.message || 'Cancellation failed', 'error'),
   });
 
   const completeMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: CompletionFormValues }) => axiosClient.post(`/trips/${id}/complete`, data),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['trips'] }); showToast('Trip completed!', 'success'); setIsCompleteOpen(false); setActiveTripDetails(null); resetComplete(); },
-    onError: (error: any) => showToast(error.response?.data?.message || 'Failed to complete trip', 'error'),
+    mutationFn: ({ id, data }: { id: number; data: CompletionFormValues }) => 
+      axiosClient.post(`/trips/${id}/complete`, {
+        finalOdometer: data.finalOdometer,
+        actualDistance: data.actualDistance,
+        revenue: data.revenue
+      }),
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['trips'] }); 
+      showToast('Trip completed!', 'success'); 
+      setIsCompleteOpen(false); 
+      setActiveTripDetails(null); 
+      resetComplete(); 
+    },
+    onError: (error: any) => showToast(error.response?.data?.error?.message || error.response?.data?.message || 'Failed to complete trip', 'error'),
   });
 
   const handleCreateSubmit = (data: TripFormValues) => {
@@ -169,7 +202,7 @@ export const Trips: React.FC = () => {
           <option value="CANCELLED">Cancelled</option>
         </select>
         {filterStatus && (
-          <button onClick={() => setFilterStatus('')} style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--color-accent-h)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>Clear</button>
+          <button onClick={() => setFilterStatus('')} style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--color-interactive)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>Clear</button>
         )}
       </div>
 
@@ -194,7 +227,7 @@ export const Trips: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <div>
                   <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                    #{trip.tripNumber || trip.id.substring(0, 8)}
+                    #{trip.id}
                   </span>
                   <h3 style={{ margin: '4px 0 0', fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span>{trip.source}</span>
@@ -213,7 +246,7 @@ export const Trips: React.FC = () => {
                 </div>
                 <div>
                   <p style={{ margin: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Distance</p>
-                  <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{trip.distance.toLocaleString()} km</p>
+                  <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{trip.plannedDistance.toLocaleString()} km</p>
                 </div>
               </div>
 
@@ -236,7 +269,7 @@ export const Trips: React.FC = () => {
               <button onClick={() => { setIsCreateOpen(false); setBackendError(null); }} className="btn btn-ghost btn-icon"><X size={16} strokeWidth={1.75} /></button>
             </div>
 
-            <form onSubmit={handleSubmit(handleCreateSubmit)} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <form onSubmit={handleSubmit(data => handleCreateSubmit(data as TripFormValues))} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               {backendError && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', backgroundColor: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 9, fontSize: 12, color: '#f87171' }}>
                   <XCircle size={14} strokeWidth={2} />
@@ -264,9 +297,9 @@ export const Trips: React.FC = () => {
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={labelStyle}>Assign Vehicle</label>
                   <select {...register('vehicleId')} style={inputStyle(!!errors.vehicleId)}>
-                    <option value="">Select dispatchable vehicle…</option>
-                    {dispatchableVehicles?.map(v => (
-                      <option key={v.id} value={v.id}>{v.registrationNumber} ({v.model}) — Max: {v.maxCapacity.toLocaleString()} kg</option>
+                    <option value="">Select available vehicle…</option>
+                    {availableVehicles?.map(v => (
+                      <option key={v.id} value={v.id}>{v.registrationNumber} ({v.model}) — Max: {v.maxLoadCapacity.toLocaleString()} kg</option>
                     ))}
                   </select>
                   {errors.vehicleId && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.vehicleId.message}</p>}
@@ -274,8 +307,8 @@ export const Trips: React.FC = () => {
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label style={labelStyle}>Assign Driver</label>
                   <select {...register('driverId')} style={inputStyle(!!errors.driverId)}>
-                    <option value="">Select dispatchable driver…</option>
-                    {dispatchableDrivers?.map(d => (
+                    <option value="">Select available driver…</option>
+                    {availableDrivers?.map(d => (
                       <option key={d.id} value={d.id}>{d.name} ({d.licenseNumber})</option>
                     ))}
                   </select>
@@ -286,15 +319,15 @@ export const Trips: React.FC = () => {
                   <input type="number" {...register('cargoWeight', { valueAsNumber: true })} style={inputStyle(!!errors.cargoWeight || isOverCapacity)} />
                   {selectedVehicleDetails && (
                     <p style={{ margin: '4px 0 0', fontSize: 11, fontWeight: 600, color: isOverCapacity ? '#f87171' : '#34d399' }}>
-                      Max: {selectedVehicleDetails.maxCapacity.toLocaleString()} kg — {isOverCapacity ? 'Exceeded!' : 'Safe'}
+                      Max: {selectedVehicleDetails.maxLoadCapacity.toLocaleString()} kg — {isOverCapacity ? 'Exceeded!' : 'Safe'}
                     </p>
                   )}
                   {errors.cargoWeight && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.cargoWeight.message}</p>}
                 </div>
                 <div>
-                  <label style={labelStyle}>Distance (km)</label>
-                  <input type="number" {...register('distance', { valueAsNumber: true })} style={inputStyle(!!errors.distance)} />
-                  {errors.distance && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.distance.message}</p>}
+                  <label style={labelStyle}>Planned Distance (km)</label>
+                  <input type="number" {...register('plannedDistance', { valueAsNumber: true })} style={inputStyle(!!errors.plannedDistance)} />
+                  {errors.plannedDistance && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.plannedDistance.message}</p>}
                 </div>
               </div>
 
@@ -332,9 +365,9 @@ export const Trips: React.FC = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 {[
                   { label: 'Origin', value: activeTripDetails.source, icon: <MapPin size={13} strokeWidth={1.75} style={{ color: 'var(--color-interactive)' }} /> },
-                  { label: 'Destination', value: activeTripDetails.destination, icon: <MapPin size={13} strokeWidth={1.75} style={{ color: 'var(--color-accent-h)' }} /> },
+                  { label: 'Destination', value: activeTripDetails.destination, icon: <MapPin size={13} strokeWidth={1.75} style={{ color: 'var(--color-interactive)' }} /> },
                   { label: 'Cargo Weight', value: `${activeTripDetails.cargoWeight.toLocaleString()} kg`, icon: <Weight size={13} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} /> },
-                  { label: 'Distance', value: `${activeTripDetails.distance.toLocaleString()} km`, icon: <Navigation size={13} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} /> },
+                  { label: 'Planned Distance', value: `${activeTripDetails.plannedDistance.toLocaleString()} km`, icon: <Navigation size={13} strokeWidth={1.75} style={{ color: 'var(--text-muted)' }} /> },
                 ].map(item => (
                   <div key={item.label}>
                     <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>{item.label}</span>
@@ -350,12 +383,16 @@ export const Trips: React.FC = () => {
               {activeTripDetails.status === 'COMPLETED' && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '14px 16px', backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--border)', borderRadius: 12 }}>
                   <div>
-                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>End Odometer</span>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginTop: 3 }}>{activeTripDetails.endOdometer?.toLocaleString()} km</div>
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Final Odometer</span>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginTop: 3 }}>{activeTripDetails.finalOdometer?.toLocaleString()} km</div>
                   </div>
                   <div>
-                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Fuel Consumed</span>
-                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginTop: 3 }}>{activeTripDetails.fuelConsumed?.toLocaleString()} L</div>
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Actual Distance</span>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginTop: 3 }}>{activeTripDetails.actualDistance?.toLocaleString()} km</div>
+                  </div>
+                  <div>
+                    <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>Revenue</span>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', marginTop: 3 }}>${activeTripDetails.revenue?.toLocaleString()}</div>
                   </div>
                 </div>
               )}
@@ -370,13 +407,20 @@ export const Trips: React.FC = () => {
                     </button>
                   )}
                   {activeTripDetails.status === 'DRAFT' && isFleetManager && (
-                    <button onClick={() => dispatchMutation.mutate(activeTripDetails.id)} disabled={dispatchMutation.isPending} className="btn btn-primary btn-md">
+                    <button onClick={() => dispatchMutation.mutate(activeTripDetails)} disabled={dispatchMutation.isPending} className="btn btn-primary btn-md">
                       <Play size={13} strokeWidth={2} />
                       {dispatchMutation.isPending ? 'Dispatching…' : 'Dispatch'}
                     </button>
                   )}
                   {activeTripDetails.status === 'DISPATCHED' && (
-                    <button onClick={() => setIsCompleteOpen(true)} className="btn btn-md" style={{ backgroundColor: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }}>
+                    <button onClick={() => {
+                      resetComplete({
+                        finalOdometer: activeTripDetails.vehicle?.odometer || 0,
+                        actualDistance: activeTripDetails.plannedDistance,
+                        revenue: 1000
+                      });
+                      setIsCompleteOpen(true);
+                    }} className="btn btn-md" style={{ backgroundColor: 'rgba(52,211,153,0.12)', color: '#34d399', border: '1px solid rgba(52,211,153,0.25)' }}>
                       <CheckCircle size={13} strokeWidth={2} />
                       Complete Trip
                     </button>
@@ -397,16 +441,21 @@ export const Trips: React.FC = () => {
               <button onClick={() => setIsCompleteOpen(false)} className="btn btn-ghost btn-icon"><X size={16} strokeWidth={1.75} /></button>
             </div>
 
-            <form onSubmit={handleSubmitComplete(handleCompleteSubmit)} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <form onSubmit={handleSubmitComplete(data => handleCompleteSubmit(data as CompletionFormValues))} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label style={labelStyle}>End Odometer (km)</label>
-                <input type="number" {...registerComplete('endOdometer', { valueAsNumber: true })} style={inputStyle(!!errorsComplete.endOdometer)} placeholder="e.g. 102450" />
-                {errorsComplete.endOdometer && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsComplete.endOdometer.message}</p>}
+                <input type="number" {...registerComplete('finalOdometer', { valueAsNumber: true })} style={inputStyle(!!errorsComplete.finalOdometer)} placeholder="e.g. 102450" />
+                {errorsComplete.finalOdometer && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsComplete.finalOdometer.message}</p>}
               </div>
               <div>
-                <label style={labelStyle}>Fuel Consumed (Liters)</label>
-                <input type="number" {...registerComplete('fuelConsumed', { valueAsNumber: true })} style={inputStyle(!!errorsComplete.fuelConsumed)} placeholder="e.g. 84.5" />
-                {errorsComplete.fuelConsumed && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsComplete.fuelConsumed.message}</p>}
+                <label style={labelStyle}>Actual Distance (km)</label>
+                <input type="number" {...registerComplete('actualDistance', { valueAsNumber: true })} style={inputStyle(!!errorsComplete.actualDistance)} placeholder="e.g. 150" />
+                {errorsComplete.actualDistance && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsComplete.actualDistance.message}</p>}
+              </div>
+              <div>
+                <label style={labelStyle}>Revenue ($)</label>
+                <input type="number" {...registerComplete('revenue', { valueAsNumber: true })} style={inputStyle(!!errorsComplete.revenue)} placeholder="e.g. 1200" />
+                {errorsComplete.revenue && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsComplete.revenue.message}</p>}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>

@@ -8,16 +8,17 @@ import type { Vehicle, VehicleStatus } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import { TableSkeleton } from '../components/Skeletons';
-import { Plus, Filter, Edit2, Trash2, X, Check, Info, AlertTriangle } from 'lucide-react';
+import { Plus, Filter, Edit2, Trash2, X, Info, AlertTriangle } from 'lucide-react';
 
 const vehicleSchema = z.object({
   registrationNumber: z.string().min(1, 'Registration number is required'),
+  name: z.string().min(1, 'Vehicle name is required'),
   model: z.string().min(1, 'Model is required'),
-  type: z.enum(['SEMI_TRUCK', 'BOX_TRUCK', 'FLATBED', 'VAN']),
+  type: z.string().min(1, 'Type is required'),
   status: z.enum(['AVAILABLE', 'ON_TRIP', 'IN_SHOP', 'RETIRED']),
-  region: z.string().min(1, 'Region is required'),
-  maxCapacity: z.number().positive('Capacity must be greater than 0'),
-  dispatchable: z.boolean(),
+  maxLoadCapacity: z.number().positive('Capacity must be positive'),
+  odometer: z.number().nonnegative('Odometer cannot be negative'),
+  acquisitionCost: z.number().nonnegative('Cost cannot be negative'),
 });
 
 type VehicleFormValues = z.infer<typeof vehicleSchema>;
@@ -38,59 +39,106 @@ export const Vehicles: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
-  const isManager = user?.role === 'FLEET_MANAGER';
+  const isManager = user?.role === 'FLEET_MANAGER' || user?.role === 'SUPER_ADMIN' || user?.role === 'BRANCH_ADMIN';
   const hasWriteAccess = isManager;
 
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
-  const [filterRegion, setFilterRegion] = useState('');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
 
   const { data: vehicles, isLoading, isError } = useQuery<Vehicle[]>({
-    queryKey: ['vehicles', filterType, filterStatus, filterRegion],
+    queryKey: ['vehicles', filterType, filterStatus],
     queryFn: async () => {
       const response = await axiosClient.get('/vehicles', {
-        params: { type: filterType || undefined, status: filterStatus || undefined, region: filterRegion || undefined },
+        params: { type: filterType || undefined, status: filterStatus || undefined },
       });
       return response.data;
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: async (v: VehicleFormValues) => (await axiosClient.post('/vehicles', v)).data,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['vehicles'] }); showToast('Vehicle added successfully!', 'success'); setIsFormOpen(false); },
-    onError: (err: any) => showToast(err.response?.data?.message || 'Failed to add vehicle', 'error'),
+    mutationFn: async (v: VehicleFormValues) => {
+      return (await axiosClient.post('/vehicles', {
+        ...v,
+        branchId: user?.branchId || 1, // Fallback to 1 if superadmin/none
+      })).data;
+    },
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] }); 
+      showToast('Vehicle added successfully!', 'success'); 
+      setIsFormOpen(false); 
+    },
+    onError: (err: any) => showToast(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to add vehicle', 'error'),
   });
 
   const updateMutation = useMutation({
     mutationFn: async (v: VehicleFormValues) => {
       if (!selectedVehicle) return;
-      return (await axiosClient.put(`/vehicles/${selectedVehicle.id}`, v)).data;
+      return (await axiosClient.put(`/vehicles/${selectedVehicle.id}`, {
+        ...v,
+        branchId: selectedVehicle.branchId,
+      })).data;
     },
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['vehicles'] }); showToast('Vehicle updated!', 'success'); setIsFormOpen(false); setSelectedVehicle(null); },
-    onError: (err: any) => showToast(err.response?.data?.message || 'Failed to update vehicle', 'error'),
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] }); 
+      showToast('Vehicle updated!', 'success'); 
+      setIsFormOpen(false); 
+      setSelectedVehicle(null); 
+    },
+    onError: (err: any) => showToast(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to update vehicle', 'error'),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: async (id: string) => (await axiosClient.delete(`/vehicles/${id}`)).data,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['vehicles'] }); showToast('Vehicle deleted', 'success'); setDeleteConfirmId(null); },
-    onError: (err: any) => showToast(err.response?.data?.message || 'Failed to delete vehicle', 'error'),
+    mutationFn: async (id: number) => (await axiosClient.delete(`/vehicles/${id}`)).data,
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] }); 
+      showToast('Vehicle deleted', 'success'); 
+      setDeleteConfirmId(null); 
+    },
+    onError: (err: any) => showToast(err.response?.data?.error?.message || err.response?.data?.message || 'Failed to delete vehicle', 'error'),
   });
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<VehicleFormValues>({
     resolver: zodResolver(vehicleSchema),
-    defaultValues: { registrationNumber: '', model: '', type: 'SEMI_TRUCK', status: 'AVAILABLE', region: '', maxCapacity: 5000, dispatchable: true },
+    defaultValues: { 
+      registrationNumber: '', 
+      name: '',
+      model: '', 
+      type: 'SEMI_TRUCK', 
+      status: 'AVAILABLE', 
+      maxLoadCapacity: 5000, 
+      odometer: 0,
+      acquisitionCost: 0 
+    },
   });
 
   const handleOpenForm = (vehicle: Vehicle | null) => {
     if (vehicle) {
       setSelectedVehicle(vehicle);
-      reset({ registrationNumber: vehicle.registrationNumber, model: vehicle.model, type: vehicle.type as any, status: vehicle.status, region: vehicle.region, maxCapacity: vehicle.maxCapacity, dispatchable: vehicle.dispatchable });
+      reset({ 
+        registrationNumber: vehicle.registrationNumber, 
+        name: vehicle.name,
+        model: vehicle.model, 
+        type: vehicle.type, 
+        status: vehicle.status, 
+        maxLoadCapacity: vehicle.maxLoadCapacity,
+        odometer: vehicle.odometer,
+        acquisitionCost: vehicle.acquisitionCost
+      });
     } else {
       setSelectedVehicle(null);
-      reset({ registrationNumber: '', model: '', type: 'SEMI_TRUCK', status: 'AVAILABLE', region: '', maxCapacity: 5000, dispatchable: true });
+      reset({ 
+        registrationNumber: '', 
+        name: '',
+        model: '', 
+        type: 'SEMI_TRUCK', 
+        status: 'AVAILABLE', 
+        maxLoadCapacity: 5000,
+        odometer: 0,
+        acquisitionCost: 0
+      });
     }
     setIsFormOpen(true);
   };
@@ -129,14 +177,16 @@ export const Vehicles: React.FC = () => {
           <h1 className="page-title">Fleet Units</h1>
           <p className="page-subtitle">Vehicle classifications, status, and payload limits</p>
         </div>
-        <button
-          onClick={() => handleOpenForm(null)}
-          className="btn btn-primary btn-md"
-          style={{ flexShrink: 0 }}
-        >
-          <Plus size={14} strokeWidth={2} />
-          Add Vehicle
-        </button>
+        {hasWriteAccess && (
+          <button
+            onClick={() => handleOpenForm(null)}
+            className="btn btn-primary btn-md"
+            style={{ flexShrink: 0 }}
+          >
+            <Plus size={14} strokeWidth={2} />
+            Add Vehicle
+          </button>
+        )}
       </div>
 
       {/* Filters */}
@@ -158,16 +208,8 @@ export const Vehicles: React.FC = () => {
           <option value="IN_SHOP">In Shop</option>
           <option value="RETIRED">Retired</option>
         </select>
-        <select value={filterRegion} onChange={e => setFilterRegion(e.target.value)} className="filter-select">
-          <option value="">All Regions</option>
-          <option value="NORTH">North</option>
-          <option value="SOUTH">South</option>
-          <option value="EAST">East</option>
-          <option value="WEST">West</option>
-          <option value="MIDWEST">Midwest</option>
-        </select>
-        {(filterType || filterStatus || filterRegion) && (
-          <button onClick={() => { setFilterType(''); setFilterStatus(''); setFilterRegion(''); }} style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--color-accent-h)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
+        {(filterType || filterStatus) && (
+          <button onClick={() => { setFilterType(''); setFilterStatus(''); }} style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 600, color: 'var(--color-interactive)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 8px' }}>
             Clear
           </button>
         )}
@@ -196,7 +238,7 @@ export const Vehicles: React.FC = () => {
               {/* Card header */}
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
                 <div>
-                  <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--color-accent-h)' }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--color-interactive)' }}>
                     {formatType(vehicle.type)}
                   </span>
                   <h3 style={{ margin: '3px 0 0', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
@@ -209,17 +251,15 @@ export const Vehicles: React.FC = () => {
               {/* Card details */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '14px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
                 {[
+                  { label: 'Name',        value: vehicle.name },
                   { label: 'Model',       value: vehicle.model },
-                  { label: 'Region',      value: vehicle.region },
-                  { label: 'Max Payload', value: `${vehicle.maxCapacity.toLocaleString()} kg` },
-                  { label: 'Dispatch',    value: vehicle.dispatchable
-                    ? <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#34d399' }}><Check size={12} strokeWidth={2.5} /> Ready</span>
-                    : <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#f87171' }}><X size={12} strokeWidth={2.5} /> Blocked</span>
-                  },
+                  { label: 'Max Payload', value: `${vehicle.maxLoadCapacity.toLocaleString()} kg` },
+                  { label: 'Odometer',    value: `${vehicle.odometer.toLocaleString()} km` },
+                  { label: 'Cost',        value: `$${vehicle.acquisitionCost.toLocaleString()}` },
                 ].map(item => (
-                  <div key={item.label as string}>
+                  <div key={item.label}>
                     <p style={{ margin: 0, fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>{item.label}</p>
-                    <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>{item.value}</p>
+                    <p style={{ margin: '3px 0 0', fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.value}</p>
                   </div>
                 ))}
               </div>
@@ -267,8 +307,13 @@ export const Vehicles: React.FC = () => {
                   {errors.registrationNumber && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.registrationNumber.message}</p>}
                 </div>
                 <div>
+                  <label style={labelStyle}>Name</label>
+                  <input type="text" {...register('name')} style={inputStyle(!!errors.name)} placeholder="e.g. Tata Ace" />
+                  {errors.name && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.name.message}</p>}
+                </div>
+                <div>
                   <label style={labelStyle}>Model</label>
-                  <input type="text" {...register('model')} style={inputStyle(!!errors.model)} placeholder="e.g. Tata Prima" />
+                  <input type="text" {...register('model')} style={inputStyle(!!errors.model)} placeholder="e.g. 2023" />
                   {errors.model && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.model.message}</p>}
                 </div>
                 <div>
@@ -290,21 +335,21 @@ export const Vehicles: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label style={labelStyle}>Region</label>
-                  <input type="text" {...register('region')} style={inputStyle(!!errors.region)} placeholder="e.g. WEST" />
-                  {errors.region && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.region.message}</p>}
+                  <label style={labelStyle}>Max Capacity (kg)</label>
+                  <input type="number" {...register('maxLoadCapacity', { valueAsNumber: true })} style={inputStyle(!!errors.maxLoadCapacity)} />
+                  {errors.maxLoadCapacity && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.maxLoadCapacity.message}</p>}
                 </div>
                 <div>
-                  <label style={labelStyle}>Max Capacity (kg)</label>
-                  <input type="number" {...register('maxCapacity', { valueAsNumber: true })} style={inputStyle(!!errors.maxCapacity)} />
-                  {errors.maxCapacity && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.maxCapacity.message}</p>}
+                  <label style={labelStyle}>Odometer (km)</label>
+                  <input type="number" {...register('odometer', { valueAsNumber: true })} style={inputStyle(!!errors.odometer)} />
+                  {errors.odometer && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.odometer.message}</p>}
+                </div>
+                <div>
+                  <label style={labelStyle}>Acquisition Cost ($)</label>
+                  <input type="number" {...register('acquisitionCost', { valueAsNumber: true })} style={inputStyle(!!errors.acquisitionCost)} />
+                  {errors.acquisitionCost && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.acquisitionCost.message}</p>}
                 </div>
               </div>
-
-              <label style={{ display: 'flex', alignItems: 'center', gap: 9, cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-secondary)' }}>
-                <input type="checkbox" id="dispatchable" {...register('dispatchable')} />
-                Available for trip dispatch scheduling
-              </label>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
                 <button type="button" onClick={() => setIsFormOpen(false)} className="btn btn-ghost btn-md">Cancel</button>

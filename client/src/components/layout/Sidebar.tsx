@@ -2,36 +2,58 @@ import { motion } from "framer-motion"
 import { NavLink } from "react-router-dom"
 import { 
   LayoutDashboard, Truck, Users, Route, 
-  Wrench, Fuel, BarChart3
+  Wrench, Fuel, BarChart3, Building2, UserCog
 } from "lucide-react"
 import { cn } from "../../lib/utils"
+import { useAuth } from "../../context/AuthContext"
 
 interface SidebarProps {
   collapsed: boolean
   setCollapsed: (collapsed: boolean) => void
 }
 
-const navSections = [
-  {
-    label: "Operations",
-    items: [
-      { icon: LayoutDashboard, label: "Dashboard", href: "/" },
-      { icon: Truck, label: "Vehicles", href: "/vehicles" },
-      { icon: Users, label: "Drivers", href: "/drivers" },
-      { icon: Route, label: "Trips", href: "/trips" },
-      { icon: Wrench, label: "Maintenance", href: "/maintenance" },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { icon: Fuel, label: "Fuel & Expenses", href: "/expenses" },
-      { icon: BarChart3, label: "Reports", href: "/reports" },
-    ],
-  },
-]
-
 export function Sidebar({ collapsed }: SidebarProps) {
+  const { user } = useAuth();
+  const role = user?.role || "FLEET_MANAGER";
+
+  // Build nav links dynamically based on role permissions
+  const menuItems = [];
+
+  if (role === "SUPER_ADMIN") {
+    menuItems.push(
+      { icon: Building2, label: "Branches", href: "/branches" },
+      { icon: UserCog, label: "Users", href: "/users" }
+    );
+  } else {
+    // Dashboard for everyone else
+    menuItems.push({ icon: LayoutDashboard, label: "Dashboard", href: "/" });
+
+    if (role === "BRANCH_ADMIN") {
+      menuItems.push(
+        { icon: UserCog, label: "User Management", href: "/users" },
+        { icon: Route, label: "Orders (Trips)", href: "/trips" }
+      );
+    } else if (role === "FLEET_MANAGER") {
+      menuItems.push(
+        { icon: Truck, label: "Vehicles", href: "/vehicles" },
+        { icon: Wrench, label: "Maintenance", href: "/maintenance" }
+      );
+    } else if (role === "SAFETY_OFFICER") {
+      menuItems.push(
+        { icon: Users, label: "Drivers", href: "/drivers" }
+      );
+    } else if (role === "DISPATCHER") {
+      menuItems.push(
+        { icon: Route, label: "Trips Dispatch", href: "/trips" }
+      );
+    } else if (role === "FINANCIAL_ANALYST") {
+      menuItems.push(
+        { icon: Fuel, label: "Fuel & Expenses", href: "/expenses" },
+        { icon: BarChart3, label: "Reports", href: "/reports" }
+      );
+    }
+  }
+
   return (
     <motion.aside
       animate={{ width: collapsed ? 72 : 248 }}
@@ -56,39 +78,30 @@ export function Sidebar({ collapsed }: SidebarProps) {
         </div>
 
         {/* Nav */}
-        <nav className="flex flex-col gap-5 px-3 mt-4">
-          {navSections.map((section) => (
-            <div key={section.label}>
-              {!collapsed && (
-                <p className="text-[10px] font-bold uppercase tracking-widest text-text-muted px-3 mb-1.5">
-                  {section.label}
-                </p>
-              )}
-              <div className="flex flex-col gap-0.5">
-                {section.items.map((item) => (
-                  <NavLink
-                    key={item.href}
-                    to={item.href}
-                    end={item.href === "/"}
-                    title={collapsed ? item.label : undefined}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-sm font-medium group",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-text-secondary hover:bg-card hover:text-text-primary"
-                      )
-                    }
-                  >
-                    <item.icon className="w-4.5 h-4.5 shrink-0" />
-                    {!collapsed && (
-                      <span className="whitespace-nowrap">{item.label}</span>
-                    )}
-                  </NavLink>
-                ))}
-              </div>
-            </div>
-          ))}
+        <nav className="flex flex-col gap-1 px-3 mt-4">
+          <div className="flex flex-col gap-0.5">
+            {menuItems.map((item) => (
+              <NavLink
+                key={item.href}
+                to={item.href}
+                end={item.href === "/"}
+                title={collapsed ? item.label : undefined}
+                className={({ isActive }) =>
+                  cn(
+                    "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-150 text-sm font-medium group",
+                    isActive
+                      ? "bg-primary/10 text-primary"
+                      : "text-text-secondary hover:bg-card hover:text-text-primary"
+                  )
+                }
+              >
+                <item.icon className="w-4.5 h-4.5 shrink-0" />
+                {!collapsed && (
+                  <span className="whitespace-nowrap">{item.label}</span>
+                )}
+              </NavLink>
+            ))}
+          </div>
         </nav>
       </div>
 

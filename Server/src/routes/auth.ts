@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { validate } from '../middleware/validate';
 import { loginSchema, refreshTokenSchema } from '../types';
+import { authenticateToken } from '../middleware/auth';
 
 const router = Router();
 
@@ -126,6 +127,19 @@ router.post('/logout', validate(refreshTokenSchema), async (req, res, next) => {
       data: { revokedAt: new Date() }
     });
     res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/me', authenticateToken, async (req, res, next) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user!.userId },
+      select: { id: true, name: true, email: true, role: true, branchId: true }
+    });
+    if (!user) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'User not found' } });
+    res.json(user);
   } catch (error) {
     next(error);
   }

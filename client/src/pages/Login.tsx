@@ -31,12 +31,20 @@ export const Login: React.FC = () => {
     setIsSubmitting(true);
     try {
       const response = await axiosClient.post('/auth/login', data);
-      const { accessToken, user } = response.data;
-      login(accessToken, user);
+      const { accessToken, refreshToken } = response.data;
+
+      // Temporarily store token so request interceptor can use it to fetch user info
+      localStorage.setItem('transitops_token', accessToken);
+
+      // Fetch the authenticated user's profile
+      const meResponse = await axiosClient.get('/auth/me');
+      const user = meResponse.data;
+
+      login(accessToken, refreshToken, user);
       showToast(`Welcome back, ${user.name}!`, 'success');
       navigate('/');
     } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Login failed. Please check your credentials.';
+      const errorMsg = error.response?.data?.message || error.response?.data?.error?.message || 'Login failed. Please check your credentials.';
       showToast(errorMsg, 'error');
     } finally {
       setIsSubmitting(false);
