@@ -199,6 +199,64 @@ app.post('/api/trips/:id/complete', authenticate, async (req, res) => {
   }
 });
 
+// Expenses & Fuel Logs
+app.post('/api/fuel-logs', authenticate, async (req, res) => {
+  try {
+    const { vehicleId, liters, cost, date, tripId } = req.body;
+    const e = await prisma.expense.create({
+      data: {
+        type: 'FUEL',
+        amount: parseFloat(cost) || 0,
+        date: date ? new Date(date) : new Date(),
+        description: `Fuel log: ${liters} liters`,
+        vehicleId: vehicleId || null,
+        tripId: tripId || null
+      }
+    });
+    res.json(e);
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/expenses', authenticate, async (req, res) => {
+  try {
+    const { vehicleId, type, amount, date, description } = req.body;
+    const e = await prisma.expense.create({
+      data: {
+        type: type || 'OTHER',
+        amount: parseFloat(amount) || 0,
+        date: date ? new Date(date) : new Date(),
+        description: description || '',
+        vehicleId: vehicleId || null
+      }
+    });
+    res.json(e);
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/operational-cost/:vehicleId', authenticate, async (req, res) => {
+  try {
+    const { vehicleId } = req.params;
+    const expenses = await prisma.expense.findMany({ where: { vehicleId } });
+    
+    const fuelCost = expenses.filter(e => e.type === 'FUEL').reduce((acc, curr) => acc + curr.amount, 0);
+    const maintenanceCost = expenses.filter(e => e.type === 'MAINTENANCE').reduce((acc, curr) => acc + curr.amount, 0);
+    const otherCost = expenses.filter(e => e.type === 'OTHER' || e.type === 'TOLL').reduce((acc, curr) => acc + curr.amount, 0);
+    
+    res.json({
+      fuelCost,
+      maintenanceCost,
+      otherCost,
+      totalCost: fuelCost + maintenanceCost + otherCost
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // Reports
 app.get('/api/reports/vehicles', authenticate, async (req, res) => {
   try {
