@@ -1,6 +1,99 @@
-node_modules
-dist
+# ========================
+# Dependencies
+# ========================
+node_modules/
+.pnp
+.pnp.js
+
+# ========================
+# Build output
+# ========================
+dist/
+build/
+out/
+
+# ========================
+# Environment variables
+# ========================
 .env
-.env.*
+.env.local
+.env.*.local
+.env.development
+.env.production
+.env.test
+# Keep the example file
 !.env.example
-coverage
+
+# ========================
+# Prisma
+# ========================
+# Keep migrations and schema in git
+# Ignore generated client (regenerated via prisma generate)
+node_modules/.prisma/
+
+# ========================
+# Logs
+# ========================
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# ========================
+# Test & Coverage
+# ========================
+coverage/
+*.lcov
+.nyc_output/
+
+# ========================
+# TypeScript
+# ========================
+*.tsbuildinfo
+
+# ========================
+# Package manager locks
+# (keep only the one you use)
+# ========================
+# Uncomment to ignore if using yarn or pnpm:
+# yarn.lock
+# pnpm-lock.yaml
+
+# ========================
+# OS generated files
+# ========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ========================
+# Editor & IDE
+# ========================
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+*.swo
+.fleet/
+
+# ========================
+# Temporary files
+# ========================
+tmp/
+temp/
+*.tmp
+*.temp
