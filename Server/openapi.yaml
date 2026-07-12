@@ -1,0 +1,131 @@
+openapi: 3.0.0
+info:
+  title: TransitOps API
+  version: 1.0.0
+  description: Backend API for the TransitOps system.
+servers:
+  - url: http://localhost:3000/api
+    description: Local development server
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+security:
+  - bearerAuth: []
+paths:
+  /auth/login:
+    post:
+      summary: Login to the system
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Returns access and refresh tokens.
+  /auth/refresh:
+    post:
+      summary: Refresh access token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Returns new access and refresh tokens.
+  /auth/logout:
+    post:
+      summary: Revoke refresh token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        '200':
+          description: Token revoked successfully.
+  /trips:
+    get:
+      summary: List trips for the branch
+      responses:
+        '200':
+          description: A list of trips.
+    post:
+      summary: Create a new draft trip (Branch Admin only)
+      responses:
+        '201':
+          description: Created trip.
+  /trips/{id}/dispatch:
+    post:
+      summary: Dispatch a draft trip (Dispatcher only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                vehicleId:
+                  type: string
+                driverId:
+                  type: string
+      responses:
+        '200':
+          description: Dispatched trip.
+  /trips/{id}/complete:
+    post:
+      summary: Complete a dispatched trip
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                finalOdometer:
+                  type: number
+                actualDistance:
+                  type: number
+                revenue:
+                  type: number
+      responses:
+        '200':
+          description: Completed trip.
+  /finance:
+    post:
+      summary: Submit a fuel expense (FuelLog)
+      responses:
+        '200':
+          description: Created fuel log.
