@@ -153,6 +153,7 @@ router.delete('/:id', requirePermission('trips', 'delete'), async (req, res, nex
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
     const trip = await prisma.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null }});
     if (!trip) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Trip not found' } });
+    if (trip.status !== 'DRAFT') return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Only DRAFT trips can be deleted' } });
 
     await prisma.trip.update({
       where: { id: trip.id },

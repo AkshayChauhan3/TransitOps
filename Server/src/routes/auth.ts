@@ -117,4 +117,17 @@ router.post('/refresh', validate(refreshTokenSchema), async (req, res, next) => 
   }
 });
 
+router.post('/logout', validate(refreshTokenSchema), async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    await prisma.refreshToken.updateMany({
+      where: { token: refreshToken },
+      data: { revokedAt: new Date() }
+    });
+    res.json({ message: 'Logged out successfully' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 export default router;
