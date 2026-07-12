@@ -59,9 +59,11 @@ router.post('/', requirePermission('drivers', 'create'), validate(createDriverSc
 
 router.put('/:id', requirePermission('drivers', 'update'), validate(updateDriverSchema), async (req, res, next) => {
   try {
-    const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const driver = await prisma.driver.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null }});
+    const driver = await prisma.driver.findFirst({ where: { id: parseInt(req.params.id as string, 10), deletedAt: null }});
     if (!driver) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Driver not found' } });
+    if (req.user!.role !== 'SUPER_ADMIN' && driver.branchId !== req.user!.branchId) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to modify this branch resource' } });
+    }
 
     const updateData = { ...req.body };
     if (updateData.licenseExpiryDate) updateData.licenseExpiryDate = new Date(updateData.licenseExpiryDate);
@@ -79,9 +81,11 @@ router.put('/:id', requirePermission('drivers', 'update'), validate(updateDriver
 
 router.delete('/:id', requirePermission('drivers', 'delete'), async (req, res, next) => {
   try {
-    const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const driver = await prisma.driver.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null }});
+    const driver = await prisma.driver.findFirst({ where: { id: parseInt(req.params.id as string, 10), deletedAt: null }});
     if (!driver) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Driver not found' } });
+    if (req.user!.role !== 'SUPER_ADMIN' && driver.branchId !== req.user!.branchId) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to delete this branch resource' } });
+    }
 
     await prisma.driver.update({
       where: { id: driver.id },

@@ -66,7 +66,7 @@ router.post('/:id/close', requirePermission('fleet', 'update'), validate(closeMa
 
       const [vehicle]: any[] = await tx.$queryRaw`SELECT id, status FROM "Vehicle" WHERE id = ${log.vehicleId} FOR UPDATE`;
 
-      if (vehicle.status !== 'RETIRED') {
+      if (vehicle.status === 'IN_SHOP') {
         await tx.vehicle.update({ where: { id: vehicle.id }, data: { status: 'AVAILABLE' } });
       }
 

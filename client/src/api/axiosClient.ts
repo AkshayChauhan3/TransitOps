@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const axiosClient = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: 'http://localhost:3000/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -10,8 +10,10 @@ const axiosClient = axios.create({
 // Request interceptor to attach bearer token
 axiosClient.interceptors.request.use(
   (config) => {
-    // Just attaching a mock token since mock server needs it
-    config.headers.Authorization = 'Bearer u1';
+    const token = localStorage.getItem('transitops_token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
     return config;
   },
   (error) => {

@@ -48,6 +48,33 @@ router.post('/', requirePermission('trips', 'create'), validate(createTripSchema
   }
 });
 
+router.put('/:id', requirePermission('trips', 'update'), validate(updateTripSchema), async (req, res, next) => {
+  try {
+    const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
+    
+    const result = await prisma.$transaction(async (tx) => {
+      const trip = await tx.trip.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null }});
+      if (!trip) throw { statusCode: 404, message: 'Trip not found' };
+
+      if (req.body.cargoWeight && trip.vehicleId) {
+        const vehicle = await tx.vehicle.findUnique({ where: { id: trip.vehicleId } });
+        if (vehicle && req.body.cargoWeight > vehicle.maxLoadCapacity) {
+          throw { statusCode: 400, message: 'Updated cargo weight exceeds assigned vehicle capacity' };
+        }
+      }
+
+      return tx.trip.update({
+        where: { id: trip.id },
+        data: req.body
+      });
+    });
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/:id/dispatch', requirePermission('trips', 'update'), validate(dispatchTripSchema), async (req, res, next) => {
   try {
     const vehicleId = parseInt(req.body.vehicleId, 10);
@@ -66,7 +93,7 @@ router.post('/:id/dispatch', requirePermission('trips', 'update'), validate(disp
       if (!lockedDriver || lockedDriver.deletedAt) throw { statusCode: 400, message: 'Driver not found or deleted' };
 
       if (lockedVehicle.status !== 'AVAILABLE') throw { statusCode: 400, message: `Vehicle is ${lockedVehicle.status}` };
-      if (lockedDriver.status !== 'AVAILABLE') throw { statusCode: 400, message: `Driver is ${lockedDriver.status}` };
+      if (lockedDriver.status !== 'AVAILABLE') throw { statusCode: 400, message: `Driver cannot be assigned. Status is ${lockedDriver.status} (Not AVAILABLE)` };
       if (new Date(lockedDriver.licenseExpiryDate) < new Date()) throw { statusCode: 400, message: 'Driver license is expired' };
       if (trip.cargoWeight > lockedVehicle.maxLoadCapacity) throw { statusCode: 400, message: 'Capacity exceeded' };
 

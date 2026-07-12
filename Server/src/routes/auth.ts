@@ -65,7 +65,8 @@ router.post('/login', validate(loginSchema), async (req, res, next) => {
       }
     });
 
-    res.json({ accessToken, refreshToken });
+    const { passwordHash, ...safeUser } = user;
+    res.json({ accessToken, refreshToken, user: safeUser });
   } catch (error) {
     next(error);
   }

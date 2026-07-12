@@ -59,9 +59,11 @@ router.post('/', requirePermission('fleet', 'create'), validate(createVehicleSch
 
 router.put('/:id', requirePermission('fleet', 'update'), validate(updateVehicleSchema), async (req, res, next) => {
   try {
-    const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const vehicle = await prisma.vehicle.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null }});
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: parseInt(req.params.id as string, 10), deletedAt: null }});
     if (!vehicle) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Vehicle not found' } });
+    if (req.user!.role !== 'SUPER_ADMIN' && vehicle.branchId !== req.user!.branchId) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to modify this branch resource' } });
+    }
 
     const updated = await prisma.vehicle.update({
       where: { id: vehicle.id },
@@ -76,9 +78,11 @@ router.put('/:id', requirePermission('fleet', 'update'), validate(updateVehicleS
 
 router.delete('/:id', requirePermission('fleet', 'delete'), async (req, res, next) => {
   try {
-    const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const vehicle = await prisma.vehicle.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null }});
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: parseInt(req.params.id as string, 10), deletedAt: null }});
     if (!vehicle) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Vehicle not found' } });
+    if (req.user!.role !== 'SUPER_ADMIN' && vehicle.branchId !== req.user!.branchId) {
+      return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Not authorized to delete this branch resource' } });
+    }
 
     await prisma.vehicle.update({
       where: { id: vehicle.id },

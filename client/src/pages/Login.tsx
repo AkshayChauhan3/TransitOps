@@ -31,8 +31,8 @@ export const Login: React.FC = () => {
     setIsSubmitting(true);
     try {
       const response = await axiosClient.post('/auth/login', data);
-      const { token, user } = response.data;
-      login(token, user);
+      const { accessToken, user } = response.data;
+      login(accessToken, user);
       showToast(`Welcome back, ${user.name}!`, 'success');
       navigate('/');
     } catch (error: any) {
