@@ -257,13 +257,9 @@ export default function Dashboard() {
     staleTime: 30_000,
   })
 
-  const vehicles = kpis?.vehicles as any
-  const drivers = kpis?.drivers as any
-  const trips = kpis?.trips as any
-
-  const totalVehicles = Number(vehicles?.total ?? 0)
-  const activeTrips    = Number(trips?.active ?? 0)
-  const driversOnline  = Number(drivers?.on_trip ?? 0)
+  const totalVehicles = kpis ? (Number(kpis.activeVehicles ?? 0) + Number(kpis.availableVehicles ?? 0) + Number(kpis.vehiclesInMaintenance ?? 0)) : null
+  const activeTrips    = kpis ? Number(kpis.activeTrips ?? 0) : null
+  const driversOnline  = kpis ? Number(kpis.driversOnDuty ?? 0) : null
 
   const generateReport = () => {
     const rows = [
@@ -308,12 +304,12 @@ export default function Dashboard() {
 
       {/* ROW 1: KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <KpiCard title="Total Vehicles" value={totalVehicles || "–"} icon={Truck} trend="+12%" trendUp colorClass="text-primary" />
-        <KpiCard title="Active Trips" value={activeTrips || "–"} icon={Route} trend="+5%" trendUp colorClass="text-info" />
-        <KpiCard title="Drivers Online" value={driversOnline || "–"} icon={Users} trend="-2%" trendUp={false} colorClass="text-text-primary" />
-        <KpiCard title="Fuel (Gal)" value="12,450" icon={Fuel} trend="-8%" trendUp colorClass="text-warning" />
-        <KpiCard title="Revenue" value="$42.5K" icon={DollarSign} trend="+14%" trendUp colorClass="text-success" />
-        <KpiCard title="Alerts" value="3" icon={AlertTriangle} trend="+1" trendUp={false} colorClass="text-danger" />
+        <KpiCard title="Total Vehicles" value={totalVehicles !== null ? totalVehicles : "–"} icon={Truck} trend="+12%" trendUp colorClass="text-primary" />
+        <KpiCard title="Active Trips" value={activeTrips !== null ? activeTrips : "–"} icon={Route} trend="+5%" trendUp colorClass="text-info" />
+        <KpiCard title="Drivers Online" value={driversOnline !== null ? driversOnline : "–"} icon={Users} trend="-2%" trendUp={false} colorClass="text-text-primary" />
+        <KpiCard title="Fuel (Gal)" value={kpis?.totalFuel !== undefined ? kpis.totalFuel.toLocaleString() : "12,450"} icon={Fuel} trend="-8%" trendUp colorClass="text-warning" />
+        <KpiCard title="Revenue" value={kpis?.totalRevenue !== undefined ? `$${(kpis.totalRevenue >= 1000 ? (kpis.totalRevenue / 1000).toFixed(1) + 'K' : kpis.totalRevenue)}` : "$42.5K"} icon={DollarSign} trend="+14%" trendUp colorClass="text-success" />
+        <KpiCard title="Alerts" value={kpis?.alertsCount !== undefined ? kpis.alertsCount : "3"} icon={AlertTriangle} trend="+1" trendUp={false} colorClass="text-danger" />
       </div>
 
       {/* ROW 2: Charts */}
