@@ -151,7 +151,7 @@ router.post('/:id/cancel', requirePermission('trips', 'update'), async (req, res
 router.delete('/:id', requirePermission('trips', 'delete'), async (req, res, next) => {
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const trip = await prisma.trip.findFirst({ where: { id: req.params.id, ...branchFilter, deletedAt: null }});
+    const trip = await prisma.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null }});
     if (!trip) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Trip not found' } });
 
     await prisma.trip.update({

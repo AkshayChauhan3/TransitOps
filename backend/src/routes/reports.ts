@@ -29,16 +29,22 @@ router.get('/fuel-efficiency', requirePermission('analytics', 'view'), async (re
     
     const trips = await prisma.trip.findMany({
       where: { ...branchFilter, status: 'COMPLETED', deletedAt: null },
-      include: { vehicle: { select: { registrationNumber: true } } }
+      include: { 
+        vehicle: { select: { registrationNumber: true } },
+        fuelLogs: { where: { deletedAt: null }, select: { liters: true } }
+      }
     });
 
-    const data = trips.map(t => ({
-      tripId: t.id,
-      vehicle: t.vehicle?.registrationNumber,
-      distance: t.actualDistance || 0,
-      fuelConsumed: t.fuelConsumed || 0,
-      efficiencyKmPerLiter: t.fuelConsumed ? Number(((t.actualDistance || 0) / t.fuelConsumed).toFixed(2)) : 0
-    }));
+    const data = trips.map(t => {
+      const fuelConsumed = t.fuelLogs.reduce((sum, log) => sum + log.liters, 0);
+      return {
+        tripId: t.id,
+        vehicle: t.vehicle?.registrationNumber,
+        distance: t.actualDistance || 0,
+        fuelConsumed,
+        efficiencyKmPerLiter: fuelConsumed > 0 ? Number(((t.actualDistance || 0) / fuelConsumed).toFixed(2)) : 0
+      };
+    });
 
     exportOrJson(req, res, data, 'fuel_efficiency');
   } catch (error) {
