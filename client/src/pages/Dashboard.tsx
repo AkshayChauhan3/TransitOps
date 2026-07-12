@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
+import { useToast } from "../context/ToastContext"
 import { motion, AnimatePresence } from "framer-motion"
 import { useQuery } from "@tanstack/react-query"
 import axiosClient from "../api/axiosClient"
@@ -129,15 +130,8 @@ function DateRangePicker({ value, onChange }: { value: string; onChange: (v: str
         <ChevronDown className={cn("w-3.5 h-3.5 text-text-muted transition-transform", open && "rotate-180")} />
       </button>
 
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.97 }}
-            transition={{ duration: 0.15 }}
-            className="absolute left-0 top-11 w-64 bg-card border border-border rounded-2xl shadow-2xl z-30 overflow-hidden"
-          >
+      {open && (
+          <div className="absolute left-0 top-11 w-64 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
             <div className="p-1.5">
               {DATE_RANGES.map(r => (
                 <button
@@ -186,9 +180,8 @@ function DateRangePicker({ value, onChange }: { value: string; onChange: (v: str
                 >Apply Range</button>
               </div>
             )}
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -217,15 +210,8 @@ function ChartMenu({ onExport, onRefresh, onFullscreen }: { onExport: () => void
       >
         <MoreHorizontal className="w-4 h-4" />
       </button>
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96, y: -4 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: -4 }}
-            transition={{ duration: 0.14 }}
-            className="absolute right-0 top-9 w-44 bg-card border border-border rounded-xl shadow-2xl z-30 overflow-hidden py-1"
-          >
+      {open && (
+          <div className="absolute right-0 top-9 w-44 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden py-1">
             {[
               { label: "Export as PNG", icon: Download, action: onExport },
               { label: "Export as CSV", icon: Download, action: onExport },
@@ -242,9 +228,8 @@ function ChartMenu({ onExport, onRefresh, onFullscreen }: { onExport: () => void
                 {item.label}
               </button>
             ))}
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
     </div>
   )
 }
@@ -256,6 +241,7 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [dateRange, setDateRange] = useState("24h")
   const fleetData = utilizationByRange[dateRange] || utilizationByRange["24h"]
+  const { showToast } = useToast() || { showToast: (m: string) => alert(m) }
 
   // Neon: KPI stats
   const { data: kpis, refetch: refetchKpis } = useQuery({
@@ -296,6 +282,7 @@ export default function Dashboard() {
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
+    showToast("Report generated successfully", "success")
   }
 
   return (
@@ -406,12 +393,12 @@ export default function Dashboard() {
         <motion.div variants={itemVariants} className="xl:col-span-2 bg-card border border-border rounded-[16px] shadow-[var(--shadow-card)] overflow-hidden">
           <div className="p-5 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-bold text-text-primary">Recent Active Trips</h2>
-            <button
-              onClick={() => navigate("/trips")}
+            <Link
+              to="/trips"
               className="text-xs font-semibold text-primary hover:text-primary-hover transition-colors flex items-center gap-1"
             >
               View All <ExternalLink className="w-3 h-3" />
-            </button>
+            </Link>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">

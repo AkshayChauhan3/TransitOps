@@ -1,8 +1,20 @@
 import express from 'express';
 import cors from 'cors';
 import { PrismaClient } from '@prisma/client';
+import pg from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const prisma = new PrismaClient();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+const connectionString = process.env.DATABASE_URL;
+const pool = new pg.Pool({ connectionString });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -21,6 +33,10 @@ const authenticate = async (req, res, next) => {
 app.post('/api/auth/login', async (req, res) => {
   const { email, password } = req.body;
   res.json({ token: 'u1', user: { id: 'u1', name: 'Fleet Manager', email, role: 'FLEET_MANAGER' } });
+});
+
+app.get('/api/auth/me', authenticate, async (req, res) => {
+  res.json({ id: 'u1', name: 'Fleet Manager', email: 'manager@transitops.com', role: 'FLEET_MANAGER' });
 });
 
 app.get('/api/dashboard', authenticate, async (req, res) => {
