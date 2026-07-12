@@ -1,0 +1,179 @@
+:root {
+  /* Colors */
+  --neutral-900: #111111;
+  --neutral-800: #1A1A1A;
+  --neutral-700: #222222;
+  --neutral-600: #333333;
+  --neutral-500: #666666;
+  --neutral-400: #999999;
+  --neutral-300: #CCCCCC;
+  --neutral-200: #E5E5E5;
+  --neutral-100: #F5F5F5;
+  --neutral-50: #FFFFFF;
+
+  --primary: #FF5722;
+  --primary-hover: #E64A19;
+  --primary-active: #D84315;
+
+  --success: #00E676;
+  --warning: #FFEA00;
+  --error: #FF1744;
+  --info: #00B0FF;
+
+  --bg-default: var(--neutral-50);
+  --bg-surface: var(--neutral-100);
+  --bg-surface-hover: var(--neutral-200);
+  
+  --text-default: var(--neutral-900);
+  --text-muted: var(--neutral-500);
+  --text-inverse: var(--neutral-50);
+
+  --border-default: var(--neutral-300);
+  --border-focus: var(--primary);
+
+  /* Spacing */
+  --space-0: 0px;
+  --space-px: 1px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* Typography */
+  --font-mono: var(--font-jetbrains-mono), monospace;
+
+  /* Radii */
+  --radius-none: 0px;
+}
+
+.dark {
+  --bg-default: var(--neutral-900);
+  --bg-surface: var(--neutral-800);
+  --bg-surface-hover: var(--neutral-700);
+  --text-default: var(--neutral-100);
+  --text-muted: var(--neutral-400);
+  --text-inverse: var(--neutral-900);
+  --border-default: var(--neutral-700);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-default);
+  color: var(--text-default);
+  font-family: var(--font-mono); /* Monospace everywhere for industrial feel */
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Industrial Utility Classes */
+.layout-container {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.sidebar {
+  width: 250px;
+  background-color: var(--neutral-900);
+  color: var(--neutral-100);
+  border-right: 1px solid var(--primary);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: var(--space-4);
+  font-size: 1.5rem;
+  font-weight: bold;
+  border-bottom: 1px solid var(--neutral-700);
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.nav-item {
+  padding: var(--space-3) var(--space-4);
+  color: var(--neutral-300);
+  text-decoration: none;
+  border-bottom: 1px solid var(--neutral-800);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.nav-item:hover, .nav-item.active {
+  background-color: var(--primary);
+  color: var(--text-inverse);
+  border-color: var(--primary);
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-default);
+}
+
+.top-bar {
+  height: 60px;
+  border-bottom: 1px solid var(--border-default);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+  background-color: var(--bg-surface);
+}
+
+.page-content {
+  flex: 1;
+  padding: var(--space-6);
+  overflow-y: auto;
+}
+
+/* Buttons */
+.btn-primary {
+  background-color: var(--primary);
+  color: var(--text-inverse);
+  border: 1px solid var(--primary-active);
+  padding: var(--space-2) var(--space-4);
+  font-family: var(--font-mono);
+  font-weight: bold;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: background-color 0.2s ease;
+}
+.btn-primary:hover {
+  background-color: var(--primary-hover);
+}
+
+/* Forms */
+.input-field {
+  border: 1px solid var(--border-default);
+  background-color: var(--bg-surface);
+  color: var(--text-default);
+  padding: var(--space-2);
+  font-family: var(--font-mono);
+  width: 100%;
+}
+.input-field:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}

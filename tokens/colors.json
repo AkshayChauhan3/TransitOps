@@ -1,0 +1,39 @@
+{
+  "neutral": {
+    "900": "#111111",
+    "800": "#1A1A1A",
+    "700": "#222222",
+    "600": "#333333",
+    "500": "#666666",
+    "400": "#999999",
+    "300": "#CCCCCC",
+    "200": "#E5E5E5",
+    "100": "#F5F5F5",
+    "50": "#FFFFFF"
+  },
+  "primary": {
+    "DEFAULT": "#FF5722",
+    "hover": "#E64A19",
+    "active": "#D84315"
+  },
+  "status": {
+    "success": "#00E676",
+    "warning": "#FFEA00",
+    "error": "#FF1744",
+    "info": "#00B0FF"
+  },
+  "background": {
+    "DEFAULT": "var(--neutral-900)",
+    "surface": "var(--neutral-800)",
+    "surfaceHover": "var(--neutral-700)"
+  },
+  "text": {
+    "DEFAULT": "var(--neutral-100)",
+    "muted": "var(--neutral-400)",
+    "inverse": "var(--neutral-900)"
+  },
+  "border": {
+    "DEFAULT": "var(--neutral-700)",
+    "focus": "var(--primary)"
+  }
+}

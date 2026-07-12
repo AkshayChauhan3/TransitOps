@@ -1,0 +1,6 @@
+{
+  "fonts": {
+    "mono": "'JetBrains Mono', 'Roboto Mono', 'Space Grotesk', monospace",
+    "sans": "'Inter', 'Helvetica Neue', sans-serif"
+  }
+}
