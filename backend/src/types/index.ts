@@ -84,9 +84,13 @@ export const createTripSchema = z.object({
 
 export const updateTripSchema = createTripSchema.partial();
 
+export const dispatchTripSchema = z.object({
+  vehicleId: z.string().uuid("Invalid vehicle ID"),
+  driverId: z.string().uuid("Invalid driver ID")
+});
+
 export const completeTripSchema = z.object({
   finalOdometer: z.number().positive("Final odometer must be positive"),
-  fuelConsumed: z.number().positive("Fuel consumed must be positive"),
   actualDistance: z.number().positive("Actual distance must be positive").optional(),
   revenue: z.number().nonnegative("Revenue cannot be negative").optional()
 });

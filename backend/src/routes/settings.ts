@@ -60,12 +60,12 @@ router.put('/', requirePermission('settings', 'update'), validate(updateBranchSc
 router.get('/rbac', requirePermission('settings', 'view'), (req, res) => {
   // Hardcoded mirroring of the matrix for frontend UI rendering
   const matrix = {
-    SUPER_ADMIN: { fleet: true, drivers: true, trips: true, finance: true, analytics: true, settings: true },
-    BRANCH_ADMIN: { fleet: true, drivers: true, trips: true, finance: true, analytics: true, settings: true },
-    FLEET_MANAGER: { fleet: true, drivers: true, trips: false, finance: true, analytics: true, settings: true },
-    DISPATCHER: { fleet: true, drivers: false, trips: true, finance: false, analytics: false, settings: false },
-    SAFETY_OFFICER: { fleet: false, drivers: true, trips: true, finance: false, analytics: false, settings: false },
-    FINANCIAL_ANALYST: { fleet: true, drivers: false, trips: false, finance: true, analytics: true, settings: false }
+    SUPER_ADMIN: { users: true, fleet: true, drivers: true, trips: true, finance: true, analytics: true, settings: true },
+    BRANCH_ADMIN: { users: true, fleet: false, drivers: false, trips: true, finance: false, analytics: true, settings: true },
+    FLEET_MANAGER: { users: false, fleet: true, drivers: true, trips: false, finance: true, analytics: true, settings: true },
+    DISPATCHER: { users: false, fleet: true, drivers: true, trips: true, finance: false, analytics: false, settings: false },
+    SAFETY_OFFICER: { users: false, fleet: false, drivers: true, trips: true, finance: false, analytics: false, settings: false },
+    FINANCIAL_ANALYST: { users: false, fleet: true, drivers: false, trips: false, finance: true, analytics: true, settings: false }
   };
   res.json(matrix);
 });

@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 import { authenticateToken } from '../middleware/auth';
 import { requirePermission } from '../middleware/rbac';
 import { validate } from '../middleware/validate';
-import { createTripSchema, updateTripSchema, completeTripSchema } from '../types';
+import { createTripSchema, updateTripSchema, completeTripSchema, dispatchTripSchema } from '../types';
 
 const router = Router();
 router.use(authenticateToken);
@@ -48,18 +48,18 @@ router.post('/', requirePermission('trips', 'create'), validate(createTripSchema
   }
 });
 
-router.post('/:id/dispatch', requirePermission('trips', 'update'), async (req, res, next) => {
+router.post('/:id/dispatch', requirePermission('trips', 'update'), validate(dispatchTripSchema), async (req, res, next) => {
   try {
+    const { vehicleId, driverId } = req.body;
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
     
     const result = await prisma.$transaction(async (tx) => {
       const trip = await tx.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null } });
       if (!trip) throw { statusCode: 404, message: 'Trip not found' };
       if (trip.status !== 'DRAFT') throw { statusCode: 400, message: 'Only DRAFT trips can be dispatched' };
-      if (!trip.vehicleId || !trip.driverId) throw { statusCode: 400, message: 'Vehicle and Driver must be assigned' };
 
-      const [lockedVehicle]: any[] = await tx.$queryRaw`SELECT id, status, "maxLoadCapacity", "deletedAt" FROM "Vehicle" WHERE id = ${trip.vehicleId} FOR UPDATE`;
-      const [lockedDriver]: any[] = await tx.$queryRaw`SELECT id, status, "licenseExpiryDate", "deletedAt" FROM "Driver" WHERE id = ${trip.driverId} FOR UPDATE`;
+      const [lockedVehicle]: any[] = await tx.$queryRaw`SELECT id, status, "maxLoadCapacity", "deletedAt" FROM "Vehicle" WHERE id = ${vehicleId} FOR UPDATE`;
+      const [lockedDriver]: any[] = await tx.$queryRaw`SELECT id, status, "licenseExpiryDate", "deletedAt" FROM "Driver" WHERE id = ${driverId} FOR UPDATE`;
 
       if (!lockedVehicle || lockedVehicle.deletedAt) throw { statusCode: 400, message: 'Vehicle not found or deleted' };
       if (!lockedDriver || lockedDriver.deletedAt) throw { statusCode: 400, message: 'Driver not found or deleted' };
@@ -69,12 +69,12 @@ router.post('/:id/dispatch', requirePermission('trips', 'update'), async (req, r
       if (new Date(lockedDriver.licenseExpiryDate) < new Date()) throw { statusCode: 400, message: 'Driver license is expired' };
       if (trip.cargoWeight > lockedVehicle.maxLoadCapacity) throw { statusCode: 400, message: 'Capacity exceeded' };
 
-      await tx.vehicle.update({ where: { id: trip.vehicleId }, data: { status: 'ON_TRIP' } });
-      await tx.driver.update({ where: { id: trip.driverId }, data: { status: 'ON_TRIP' } });
+      await tx.vehicle.update({ where: { id: vehicleId }, data: { status: 'ON_TRIP' } });
+      await tx.driver.update({ where: { id: driverId }, data: { status: 'ON_TRIP' } });
       
       return tx.trip.update({
         where: { id: trip.id },
-        data: { status: 'DISPATCHED', dispatchedAt: new Date() }
+        data: { status: 'DISPATCHED', dispatchedAt: new Date(), vehicleId, driverId }
       });
     });
 
@@ -86,7 +86,7 @@ router.post('/:id/dispatch', requirePermission('trips', 'update'), async (req, r
 
 router.post('/:id/complete', requirePermission('trips', 'update'), validate(completeTripSchema), async (req, res, next) => {
   try {
-    const { finalOdometer, fuelConsumed, actualDistance, revenue } = req.body;
+    const { finalOdometer, actualDistance, revenue } = req.body;
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
 
     const result = await prisma.$transaction(async (tx) => {
@@ -107,19 +107,9 @@ router.post('/:id/complete', requirePermission('trips', 'update'), validate(comp
         data: { status: 'AVAILABLE' }
       });
 
-      await tx.fuelLog.create({
-        data: {
-          vehicleId: trip.vehicleId!,
-          tripId: trip.id,
-          liters: fuelConsumed,
-          cost: fuelConsumed * 100, // example
-          date: new Date()
-        }
-      });
-
       return tx.trip.update({
         where: { id: trip.id },
-        data: { status: 'COMPLETED', completedAt: new Date(), finalOdometer, fuelConsumed, actualDistance, revenue }
+        data: { status: 'COMPLETED', completedAt: new Date(), finalOdometer, actualDistance, revenue }
       });
     });
 

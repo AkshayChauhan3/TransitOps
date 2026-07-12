@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { Role } from '@prisma/client';
 
-type Resource = 'fleet' | 'drivers' | 'trips' | 'finance' | 'analytics' | 'settings';
+type Resource = 'fleet' | 'drivers' | 'trips' | 'finance' | 'analytics' | 'settings' | 'users';
 type Action = 'view' | 'create' | 'update' | 'delete';
 
 // We map what each role can do on each resource
@@ -12,31 +12,35 @@ const rolePermissions: Record<Role, Partial<Record<Resource, Action[]>>> = {
     trips: ['view', 'create', 'update', 'delete'],
     finance: ['view', 'create', 'update', 'delete'],
     analytics: ['view'],
-    settings: ['view', 'create', 'update', 'delete'] // Super Admins can create new branches
+    settings: ['view', 'create', 'update', 'delete'],
+    users: ['view', 'create', 'update', 'delete']
   },
   BRANCH_ADMIN: {
-    fleet: ['view', 'create', 'update', 'delete'],
-    drivers: ['view', 'create', 'update', 'delete'],
-    trips: ['view', 'create', 'update', 'delete'],
-    finance: ['view', 'create', 'update', 'delete'],
+    fleet: [],
+    drivers: [],
+    trips: ['view', 'create'],
+    finance: [],
     analytics: ['view'],
-    settings: ['view', 'update'] // Admins can edit their own branch details
+    settings: ['view', 'update'],
+    users: ['view', 'create', 'update', 'delete']
   },
   FLEET_MANAGER: {
     fleet: ['view', 'create', 'update', 'delete'],
-    drivers: ['view', 'create', 'update', 'delete'],
+    drivers: ['view'],
     trips: [], // FM doesn't dispatch trips directly
     finance: ['view', 'create', 'update', 'delete'], 
     analytics: ['view'],
-    settings: ['view', 'update'] // As per Q4 resolution
+    settings: ['view', 'update'],
+    users: []
   },
   DISPATCHER: {
     fleet: ['view'],
-    drivers: [],
+    drivers: ['view'],
     trips: ['view', 'create', 'update', 'delete'], // Can dispatch
     finance: [],
     analytics: [],
-    settings: []
+    settings: [],
+    users: []
   },
   SAFETY_OFFICER: {
     fleet: [],
@@ -44,7 +48,8 @@ const rolePermissions: Record<Role, Partial<Record<Resource, Action[]>>> = {
     trips: ['view'],
     finance: [],
     analytics: [],
-    settings: []
+    settings: [],
+    users: []
   },
   FINANCIAL_ANALYST: {
     fleet: ['view'],
@@ -52,7 +57,8 @@ const rolePermissions: Record<Role, Partial<Record<Resource, Action[]>>> = {
     trips: [],
     finance: ['view', 'create', 'update', 'delete'],
     analytics: ['view'],
-    settings: []
+    settings: [],
+    users: []
   }
 };
 
