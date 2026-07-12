@@ -50,11 +50,12 @@ router.post('/', requirePermission('trips', 'create'), validate(createTripSchema
 
 router.post('/:id/dispatch', requirePermission('trips', 'update'), validate(dispatchTripSchema), async (req, res, next) => {
   try {
-    const { vehicleId, driverId } = req.body;
+    const vehicleId = parseInt(req.body.vehicleId, 10);
+    const driverId = parseInt(req.body.driverId, 10);
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
     
     const result = await prisma.$transaction(async (tx) => {
-      const trip = await tx.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null } });
+      const trip = await tx.trip.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null } });
       if (!trip) throw { statusCode: 404, message: 'Trip not found' };
       if (trip.status !== 'DRAFT') throw { statusCode: 400, message: 'Only DRAFT trips can be dispatched' };
 
@@ -90,7 +91,7 @@ router.post('/:id/complete', requirePermission('trips', 'update'), validate(comp
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
 
     const result = await prisma.$transaction(async (tx) => {
-      const trip = await tx.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null } });
+      const trip = await tx.trip.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null } });
       if (!trip) throw { statusCode: 404, message: 'Trip not found' };
       if (trip.status !== 'DISPATCHED') throw { statusCode: 400, message: 'Only DISPATCHED trips can be completed' };
       
@@ -124,7 +125,7 @@ router.post('/:id/cancel', requirePermission('trips', 'update'), async (req, res
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
     
     const result = await prisma.$transaction(async (tx) => {
-      const trip = await tx.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null } });
+      const trip = await tx.trip.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null } });
       if (!trip) throw { statusCode: 404, message: 'Trip not found' };
       if (trip.status === 'COMPLETED' || trip.status === 'CANCELLED') throw { statusCode: 400, message: `Cannot cancel a ${trip.status} trip` };
 
@@ -151,7 +152,7 @@ router.post('/:id/cancel', requirePermission('trips', 'update'), async (req, res
 router.delete('/:id', requirePermission('trips', 'delete'), async (req, res, next) => {
   try {
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
-    const trip = await prisma.trip.findFirst({ where: { id: req.params.id as string, ...branchFilter, deletedAt: null }});
+    const trip = await prisma.trip.findFirst({ where: { id: parseInt(req.params.id as string, 10), ...branchFilter, deletedAt: null }});
     if (!trip) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Trip not found' } });
     if (trip.status !== 'DRAFT') return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Only DRAFT trips can be deleted' } });
 

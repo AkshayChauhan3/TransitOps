@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 describe('RBAC Middleware', () => {
   it('should deny DISPATCHER access to financial reports', async () => {
     const token = jwt.sign(
-      { userId: '123', role: 'DISPATCHER', branchId: '456' },
+      { userId: 123, role: 'DISPATCHER', branchId: 456 },
       process.env.JWT_SECRET || 'secret'
     );
 
@@ -18,7 +18,7 @@ describe('RBAC Middleware', () => {
 
   it('should allow BRANCH_ADMIN access to trips', async () => {
     const token = jwt.sign(
-      { userId: '123', role: 'BRANCH_ADMIN', branchId: '456' },
+      { userId: 123, role: 'BRANCH_ADMIN', branchId: 456 },
       process.env.JWT_SECRET || 'secret'
     );
 

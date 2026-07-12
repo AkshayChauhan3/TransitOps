@@ -11,7 +11,7 @@ router.use(authenticateToken);
 // GET /settings - Get branch settings
 router.get('/', requirePermission('settings', 'view'), async (req, res, next) => {
   try {
-    const branchId = req.user!.role === 'SUPER_ADMIN' ? (req.query.branchId as string) : req.user!.branchId!;
+    const branchId = req.user!.role === 'SUPER_ADMIN' ? parseInt(req.query.branchId as string, 10) : req.user!.branchId!;
     
     if (!branchId) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Super Admins must provide ?branchId' } });
@@ -34,7 +34,7 @@ router.get('/', requirePermission('settings', 'view'), async (req, res, next) =>
 // PUT /settings - Update branch settings
 router.put('/', requirePermission('settings', 'update'), validate(updateBranchSchema), async (req, res, next) => {
   try {
-    const branchId = req.user!.role === 'SUPER_ADMIN' ? (req.query.branchId as string) : req.user!.branchId!;
+    const branchId = req.user!.role === 'SUPER_ADMIN' ? parseInt(req.query.branchId as string, 10) : req.user!.branchId!;
     
     if (!branchId) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Super Admins must provide ?branchId' } });

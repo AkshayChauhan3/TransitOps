@@ -84,7 +84,7 @@ router.post('/expenses', requirePermission('finance', 'create'), validate(create
 
 router.get('/vehicles/:id/operational-cost', requirePermission('finance', 'view'), async (req, res, next) => {
   try {
-    const vehicleId = req.params.id as string;
+    const vehicleId = parseInt(req.params.id as string, 10);
     const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
 
     const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId, ...branchFilter, deletedAt: null } });
