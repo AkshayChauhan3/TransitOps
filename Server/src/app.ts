@@ -12,6 +12,8 @@ import fuelExpenseRoutes from './routes/fuelExpenses';
 import dashboardRoutes from './routes/dashboard';
 import reportRoutes from './routes/reports';
 import settingsRoutes from './routes/settings';
+import userRoutes from './routes/users';
+import branchRoutes from './routes/branches';
 
 dotenv.config();
 
@@ -45,6 +47,8 @@ app.use('/api/finance', fuelExpenseRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/branches', branchRoutes);
 
 // Health check
 app.get('/health', (req, res) => res.status(200).json({ status: 'OK' }));
