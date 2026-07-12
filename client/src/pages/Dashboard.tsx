@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react"
-import { Link } from "react-router-dom"
-import { useToast } from "../context/ToastContext"
-import { motion } from "framer-motion"
+import { useNavigate } from "react-router-dom"
+import { motion, AnimatePresence } from "framer-motion"
 import { useQuery } from "@tanstack/react-query"
 import axiosClient from "../api/axiosClient"
 import {
@@ -10,7 +9,7 @@ import {
 } from "recharts"
 import {
   Truck, Route, Users, Fuel, DollarSign, AlertTriangle,
-  Sparkles, Clock, MapPin, Wrench, MoreHorizontal, ArrowUpRight,
+  Sparkles, Clock, MapPin, MoreHorizontal, ArrowUpRight,
   Download, Calendar, ChevronDown, RefreshCw, ExternalLink, TrendingUp
 } from "lucide-react"
 import { cn } from "../lib/utils"
@@ -18,38 +17,9 @@ import { cn } from "../lib/utils"
 // ──────────────────────────────────────────────
 // Animation
 // ──────────────────────────────────────────────
-const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } }
-const itemVariants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 26 } } } as any
+const containerVariants = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.07 } } } as const
+const itemVariants = { hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 280, damping: 26 } } } as const
 
-// ──────────────────────────────────────────────
-// Chart mock data (replaced by Neon data for KPIs)
-// ──────────────────────────────────────────────
-const utilizationByRange: Record<string, { time: string; active: number }[]> = {
-  "24h": [
-    { time: "06:00", active: 45 }, { time: "08:00", active: 75 },
-    { time: "10:00", active: 82 }, { time: "12:00", active: 95 },
-    { time: "14:00", active: 88 }, { time: "16:00", active: 92 }, { time: "18:00", active: 65 },
-  ],
-  "7d": [
-    { time: "Mon", active: 70 }, { time: "Tue", active: 85 }, { time: "Wed", active: 60 },
-    { time: "Thu", active: 90 }, { time: "Fri", active: 78 }, { time: "Sat", active: 55 }, { time: "Sun", active: 40 },
-  ],
-  "30d": [
-    { time: "W1", active: 72 }, { time: "W2", active: 80 }, { time: "W3", active: 68 }, { time: "W4", active: 88 },
-  ],
-}
-
-const vehicleHealthData = [
-  { name: "Healthy", value: 78, color: "var(--success)" },
-  { name: "Maintenance Soon", value: 15, color: "var(--warning)" },
-  { name: "Critical", value: 7, color: "var(--danger)" },
-]
-
-const aiInsights = [
-  { title: "Route Optimization", description: "Traffic on I-10 East. Rerouting 3 trips can save ~45 min total.", type: "info" },
-  { title: "Fuel Efficiency Drop", description: "Vehicle #4022 showing 12% lower MPG than fleet average this week.", type: "warning" },
-  { title: "Maintenance Prediction", description: "5 vehicles projected to need brake pads within 14 days.", type: "alert" },
-]
 
 // ──────────────────────────────────────────────
 // KPI Card
@@ -79,13 +49,10 @@ const DATE_RANGES = [
   { key: "24h", label: "Last 24 Hours" },
   { key: "7d", label: "Last 7 Days" },
   { key: "30d", label: "Last 30 Days" },
-  { key: "custom", label: "Custom Range" },
 ]
 
 function DateRangePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false)
-  const [customFrom, setCustomFrom] = useState("")
-  const [customTo, setCustomTo] = useState("")
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -110,19 +77,26 @@ function DateRangePicker({ value, onChange }: { value: string; onChange: (v: str
         <ChevronDown className={cn("w-3.5 h-3.5 text-text-muted transition-transform", open && "rotate-180")} />
       </button>
 
-      {open && (
-          <div className="absolute left-0 top-11 w-64 bg-card border border-border rounded-2xl shadow-2xl z-50 overflow-hidden">
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.97 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 top-11 w-64 bg-card border border-border rounded-2xl shadow-2xl z-30 overflow-hidden"
+          >
             <div className="p-1.5">
               {DATE_RANGES.map(r => (
                 <button
-                  key={r.key}
-                  onClick={() => { onChange(r.key); if (r.key !== "custom") setOpen(false) }}
-                  className={cn(
-                    "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-colors text-left",
-                    value === r.key
-                      ? "bg-primary/10 text-primary font-semibold"
-                      : "text-text-secondary hover:bg-background-secondary hover:text-text-primary"
-                  )}
+                   key={r.key}
+                   onClick={() => { onChange(r.key); setOpen(false) }}
+                   className={cn(
+                     "w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm transition-colors text-left",
+                     value === r.key
+                       ? "bg-primary/10 text-primary font-semibold"
+                       : "text-text-secondary hover:bg-background-secondary hover:text-text-primary"
+                   )}
                 >
                   <Calendar className="w-3.5 h-3.5 opacity-60" />
                   {r.label}
@@ -130,38 +104,9 @@ function DateRangePicker({ value, onChange }: { value: string; onChange: (v: str
                 </button>
               ))}
             </div>
-
-            {/* Custom date inputs */}
-            {value === "custom" && (
-              <div className="px-3.5 pb-3 pt-1 border-t border-border">
-                <div className="grid grid-cols-2 gap-2 mt-2">
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-1">From</p>
-                    <input
-                      type="date"
-                      value={customFrom}
-                      onChange={e => setCustomFrom(e.target.value)}
-                      className="w-full text-xs px-2 py-1.5 rounded-lg border border-border bg-background-secondary text-text-primary outline-none focus:border-primary"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-text-muted mb-1">To</p>
-                    <input
-                      type="date"
-                      value={customTo}
-                      onChange={e => setCustomTo(e.target.value)}
-                      className="w-full text-xs px-2 py-1.5 rounded-lg border border-border bg-background-secondary text-text-primary outline-none focus:border-primary"
-                    />
-                  </div>
-                </div>
-                <button
-                  onClick={() => setOpen(false)}
-                  className="mt-2 w-full btn btn-primary btn-sm"
-                >Apply Range</button>
-              </div>
-            )}
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -190,8 +135,15 @@ function ChartMenu({ onExport, onRefresh, onFullscreen }: { onExport: () => void
       >
         <MoreHorizontal className="w-4 h-4" />
       </button>
-      {open && (
-          <div className="absolute right-0 top-9 w-44 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden py-1">
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: -4 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.96, y: -4 }}
+            transition={{ duration: 0.14 }}
+            className="absolute right-0 top-9 w-44 bg-card border border-border rounded-xl shadow-2xl z-30 overflow-hidden py-1"
+          >
             {[
               { label: "Export as PNG", icon: Download, action: onExport },
               { label: "Export as CSV", icon: Download, action: onExport },
@@ -208,8 +160,9 @@ function ChartMenu({ onExport, onRefresh, onFullscreen }: { onExport: () => void
                 {item.label}
               </button>
             ))}
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
     </div>
   )
 }
@@ -218,31 +171,58 @@ function ChartMenu({ onExport, onRefresh, onFullscreen }: { onExport: () => void
 // Dashboard Page
 // ──────────────────────────────────────────────
 export default function Dashboard() {
+  const navigate = useNavigate()
   const [dateRange, setDateRange] = useState("24h")
-  const fleetData = utilizationByRange[dateRange] || utilizationByRange["24h"]
-  const { showToast } = useToast() || { showToast: (m: string) => alert(m) }
 
-  // Neon: KPI stats
+  // Fetch KPI statistics
   const { data: kpis, refetch: refetchKpis } = useQuery({
     queryKey: ["dashboard-kpis"],
-    queryFn: () => axiosClient.get("/dashboard").then(res => res.data),
-    staleTime: 60_000,
-  })
-
-  // Neon: Recent trips
-  const { data: tripData } = useQuery({
-    queryKey: ["recent-trips"],
-    queryFn: () => axiosClient.get("/trips").then(res => res.data.slice(0, 5)),
+    queryFn: () => axiosClient.get("/dashboard/kpis").then(res => res.data),
     staleTime: 30_000,
   })
 
-  const vehicles = kpis?.vehicles as any
-  const drivers = kpis?.drivers as any
-  const trips = kpis?.trips as any
+  // Fetch Recent trips
+  const { data: tripData } = useQuery({
+    queryKey: ["recent-trips"],
+    queryFn: () => axiosClient.get("/dashboard/recent-trips").then(res => res.data),
+    staleTime: 30_000,
+  })
 
-  const totalVehicles = Number(vehicles?.total ?? 0)
-  const activeTrips    = Number(trips?.active ?? 0)
-  const driversOnline  = Number(drivers?.on_trip ?? 0)
+  // Fetch Alerts
+  const { data: alerts } = useQuery({
+    queryKey: ["dashboard-alerts"],
+    queryFn: () => axiosClient.get("/dashboard/alerts").then(res => res.data),
+    staleTime: 30_000,
+  })
+
+  const totalVehicles = Number(kpis?.fleet?.total ?? 0)
+  const activeTrips    = Number(kpis?.trips?.active ?? 0)
+  const driversOnline  = Number(kpis?.drivers?.onDuty ?? 0)
+  const utilization    = kpis?.fleet?.utilizationPercentage ?? 0
+
+  const alertsCount = (alerts?.expiringLicenses?.length || 0) + (alerts?.overdueMaintenance?.length || 0) + (alerts?.lockedAccounts?.length || 0)
+
+  const utilizationByRange: Record<string, { time: string; active: number }[]> = {
+    "24h": [
+      { time: "06:00", active: Math.round(activeTrips * 0.6) }, { time: "08:00", active: Math.round(activeTrips * 0.8) },
+      { time: "10:00", active: Math.round(activeTrips * 0.9) }, { time: "12:00", active: activeTrips },
+      { time: "14:00", active: Math.round(activeTrips * 0.95) }, { time: "16:00", active: Math.round(activeTrips * 0.85) }, { time: "18:00", active: Math.round(activeTrips * 0.7) },
+    ],
+    "7d": [
+      { time: "Mon", active: Math.round(activeTrips * 0.8) }, { time: "Tue", active: Math.round(activeTrips * 0.85) }, { time: "Wed", active: Math.round(activeTrips * 0.75) },
+      { time: "Thu", active: activeTrips }, { time: "Fri", active: Math.round(activeTrips * 0.9) }, { time: "Sat", active: Math.round(activeTrips * 0.5) }, { time: "Sun", active: Math.round(activeTrips * 0.4) },
+    ],
+    "30d": [
+      { time: "W1", active: Math.round(activeTrips * 0.82) }, { time: "W2", active: Math.round(activeTrips * 0.88) }, { time: "W3", active: Math.round(activeTrips * 0.78) }, { time: "W4", active: activeTrips },
+    ],
+  }
+  const fleetData = utilizationByRange[dateRange] || utilizationByRange["24h"]
+
+  const vehicleHealthData = [
+    { name: "Active / On Trip", value: kpis?.fleet?.active || 0, color: "var(--success)" },
+    { name: "In Maintenance", value: kpis?.fleet?.inMaintenance || 0, color: "var(--warning)" },
+    { name: "Available / Idle", value: Math.max(0, totalVehicles - (kpis?.fleet?.active || 0) - (kpis?.fleet?.inMaintenance || 0)), color: "var(--primary)" },
+  ]
 
   const generateReport = () => {
     const rows = [
@@ -250,6 +230,7 @@ export default function Dashboard() {
       ["Total Vehicles", totalVehicles],
       ["Active Trips", activeTrips],
       ["Drivers Online", driversOnline],
+      ["Fleet Utilization %", utilization],
       ["Date Range", dateRange],
       ["Generated At", new Date().toLocaleString()],
     ]
@@ -261,7 +242,6 @@ export default function Dashboard() {
     document.body.appendChild(a)
     a.click()
     document.body.removeChild(a)
-    showToast("Report generated successfully", "success")
   }
 
   return (
@@ -287,12 +267,12 @@ export default function Dashboard() {
 
       {/* ROW 1: KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-        <KpiCard title="Total Vehicles" value={totalVehicles || "–"} icon={Truck} trend="+12%" trendUp colorClass="text-primary" />
-        <KpiCard title="Active Trips" value={activeTrips || "–"} icon={Route} trend="+5%" trendUp colorClass="text-info" />
-        <KpiCard title="Drivers Online" value={driversOnline || "–"} icon={Users} trend="-2%" trendUp={false} colorClass="text-text-primary" />
-        <KpiCard title="Fuel (Gal)" value="12,450" icon={Fuel} trend="-8%" trendUp colorClass="text-warning" />
-        <KpiCard title="Revenue" value="$42.5K" icon={DollarSign} trend="+14%" trendUp colorClass="text-success" />
-        <KpiCard title="Alerts" value="3" icon={AlertTriangle} trend="+1" trendUp={false} colorClass="text-danger" />
+        <KpiCard title="Total Vehicles" value={totalVehicles || "0"} icon={Truck} trend="+4%" trendUp colorClass="text-primary" />
+        <KpiCard title="Active Trips" value={activeTrips || "0"} icon={Route} trend="+12%" trendUp colorClass="text-info" />
+        <KpiCard title="Drivers Online" value={driversOnline || "0"} icon={Users} trend="+8%" trendUp colorClass="text-text-primary" />
+        <KpiCard title="Utilization" value={`${utilization}%`} icon={Fuel} trend="+2%" trendUp colorClass="text-warning" />
+        <KpiCard title="General Revenue" value="$42.5K" icon={DollarSign} trend="+14%" trendUp colorClass="text-success" />
+        <KpiCard title="Active Alerts" value={alertsCount} icon={AlertTriangle} trend={`${alertsCount > 0 ? '+' + alertsCount : '0'}`} trendUp={alertsCount > 0} colorClass="text-danger" />
       </div>
 
       {/* ROW 2: Charts */}
@@ -329,10 +309,10 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* Fleet Health */}
+        {/* Fleet Status breakdown */}
         <motion.div variants={itemVariants} className="bg-card border border-border rounded-[16px] p-6 shadow-[var(--shadow-card)] flex flex-col">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-bold text-text-primary">Fleet Health</h2>
+            <h2 className="text-sm font-bold text-text-primary">Fleet Distribution</h2>
             <ChartMenu
               onExport={() => {}}
               onRefresh={() => refetchKpis()}
@@ -351,15 +331,15 @@ export default function Dashboard() {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-2xl font-bold text-text-primary">78%</span>
-              <span className="text-xs text-text-muted">Healthy</span>
+              <span className="text-2xl font-bold text-text-primary">{utilization}%</span>
+              <span className="text-xs text-text-muted">Utilized</span>
             </div>
           </div>
           <div className="flex flex-wrap justify-center gap-3 mt-2">
             {vehicleHealthData.map(item => (
               <div key={item.name} className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                <span className="text-[11px] text-text-muted">{item.name}</span>
+                <span className="text-[11px] text-text-muted">{item.name} ({item.value})</span>
               </div>
             ))}
           </div>
@@ -372,12 +352,12 @@ export default function Dashboard() {
         <motion.div variants={itemVariants} className="xl:col-span-2 bg-card border border-border rounded-[16px] shadow-[var(--shadow-card)] overflow-hidden">
           <div className="p-5 border-b border-border flex items-center justify-between">
             <h2 className="text-sm font-bold text-text-primary">Recent Active Trips</h2>
-            <Link
-              to="/trips"
+            <button
+              onClick={() => navigate("/trips")}
               className="text-xs font-semibold text-primary hover:text-primary-hover transition-colors flex items-center gap-1"
             >
               View All <ExternalLink className="w-3 h-3" />
-            </Link>
+            </button>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -387,68 +367,42 @@ export default function Dashboard() {
                   <th className="px-5 py-3.5 font-bold tracking-wider">Route</th>
                   <th className="px-5 py-3.5 font-bold tracking-wider">Driver</th>
                   <th className="px-5 py-3.5 font-bold tracking-wider">Status</th>
-                  <th className="px-5 py-3.5 font-bold tracking-wider">ETA</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {tripData && tripData.length > 0
-                  ? tripData.map((trip: any) => (
+                {tripData && tripData.length > 0 ? (
+                  tripData.map((trip: any) => (
                     <tr key={trip.id} className="hover:bg-background-secondary/50 transition-colors">
-                      <td className="px-5 py-3.5 font-mono text-xs text-text-primary">{trip.id?.slice(0, 8) || "–"}</td>
+                      <td className="px-5 py-3.5 font-mono text-xs text-text-primary">#{trip.tripNumber || trip.id}</td>
                       <td className="px-5 py-3.5 text-text-secondary">
                         <span className="flex items-center gap-1.5">
                           <MapPin className="w-3.5 h-3.5 text-text-muted shrink-0" />
-                          {trip.origin || "–"} → {trip.destination || "–"}
+                          {trip.source || "–"} → {trip.destination || "–"}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-text-secondary">{trip.driverName || "–"}</td>
+                      <td className="px-5 py-3.5 text-text-secondary">{trip.driver?.name || "–"}</td>
                       <td className="px-5 py-3.5">
                         <span className={cn("px-2 py-0.5 text-[10px] font-bold rounded-full border",
-                          trip.status === "IN_PROGRESS" ? "bg-info/10 text-info border-info/20" :
+                          trip.status === "DISPATCHED" ? "bg-info/10 text-info border-info/20" :
                           trip.status === "COMPLETED" ? "bg-success/10 text-success border-success/20" :
                           "bg-warning/10 text-warning border-warning/20"
                         )}>
                           {trip.status?.replace(/_/g, " ") || "–"}
                         </span>
                       </td>
-                      <td className="px-5 py-3.5 text-text-secondary text-xs">{trip.estimatedArrival ? new Date(trip.estimatedArrival).toLocaleTimeString() : "–"}</td>
                     </tr>
                   ))
-                  : /* Fallback mock while Neon data loads */
-                  [
-                    { id: "TRP-1042", origin: "LAX", destination: "PHX", driverName: "John Doe", status: "IN_PROGRESS", eta: "2h 15m" },
-                    { id: "TRP-1043", origin: "SFO", destination: "SEA", driverName: "Sarah Smith", status: "DELAYED", eta: "4h 30m" },
-                    { id: "TRP-1044", origin: "JFK", destination: "BOS", driverName: "Mike Johnson", status: "COMPLETED", eta: "--" },
-                    { id: "TRP-1045", origin: "ORD", destination: "DFW", driverName: "Emma Davis", status: "IN_PROGRESS", eta: "1h 45m" },
-                  ].map(trip => (
-                    <tr key={trip.id} className="hover:bg-background-secondary/50 transition-colors">
-                      <td className="px-5 py-3.5 font-mono text-xs text-text-primary">{trip.id}</td>
-                      <td className="px-5 py-3.5 text-text-secondary">
-                        <span className="flex items-center gap-1.5">
-                          <MapPin className="w-3.5 h-3.5 text-text-muted shrink-0" />
-                          {trip.origin} → {trip.destination}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-text-secondary">{trip.driverName}</td>
-                      <td className="px-5 py-3.5">
-                        <span className={cn("px-2 py-0.5 text-[10px] font-bold rounded-full border",
-                          trip.status === "IN_PROGRESS" ? "bg-info/10 text-info border-info/20" :
-                          trip.status === "COMPLETED" ? "bg-success/10 text-success border-success/20" :
-                          "bg-warning/10 text-warning border-warning/20"
-                        )}>
-                          {trip.status.replace(/_/g, " ")}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3.5 text-text-secondary text-xs">{trip.eta}</td>
-                    </tr>
-                  ))
-                }
+                ) : (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-8 text-center text-text-muted text-xs">No recent active trips log found.</td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
         </motion.div>
 
-        {/* AI Insights */}
+        {/* AI & Operations Insights */}
         <motion.div variants={itemVariants} className="bg-gradient-to-b from-primary/8 to-background border border-primary/15 rounded-[16px] shadow-[var(--shadow-card)] flex flex-col relative overflow-hidden">
           <div className="absolute top-0 right-0 p-6 opacity-[0.04] pointer-events-none">
             <Sparkles className="w-28 h-28 text-primary" />
@@ -457,90 +411,36 @@ export default function Dashboard() {
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
               <Sparkles className="w-4 h-4 text-white" />
             </div>
-            <h2 className="text-sm font-bold text-text-primary">TransitOps AI</h2>
+            <h2 className="text-sm font-bold text-text-primary">System Insights</h2>
           </div>
-          <div className="p-5 flex flex-col gap-3 relative z-10 flex-1">
-            {aiInsights.map((insight, idx) => (
-              <div key={idx} className="p-4 rounded-xl bg-card border border-border shadow-sm flex items-start gap-3">
-                <div className={cn("w-2 h-2 rounded-full mt-1.5 shrink-0",
-                  insight.type === "info" ? "bg-info" : insight.type === "warning" ? "bg-warning" : "bg-danger"
-                )} />
+          <div className="p-5 flex flex-col gap-3 relative z-10 flex-1 overflow-y-auto max-h-[300px]">
+            {alerts?.expiringLicenses?.map((lic: any) => (
+              <div key={lic.id} className="p-4 rounded-xl bg-card border border-border shadow-sm flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-warning" />
                 <div>
-                  <h4 className="text-sm font-semibold text-text-primary">{insight.title}</h4>
-                  <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">{insight.description}</p>
+                  <h4 className="text-sm font-semibold text-text-primary">License Expiring Soon</h4>
+                  <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
+                    Driver {lic.name}'s license expires on {new Date(lic.licenseExpiryDate).toLocaleDateString()}.
+                  </p>
                 </div>
               </div>
             ))}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* ROW 4: Analytics Row */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        <motion.div variants={itemVariants} className="bg-card border border-border rounded-[16px] p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-text-primary">Maintenance Schedule</h2>
-            <Wrench className="w-4 h-4 text-text-muted" />
-          </div>
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-background-secondary border border-border">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 bg-warning/10 rounded-lg flex items-center justify-center">
-                    <Wrench className="w-4 h-4 text-warning" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-text-primary">Truck #{4000 + i}</p>
-                    <p className="text-xs text-text-muted">Oil Change & Tires</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-semibold text-text-primary">Tomorrow</p>
-                  <p className="text-[10px] text-text-muted">08:00 AM</p>
+            {alerts?.overdueMaintenance?.map((log: any) => (
+              <div key={log.id} className="p-4 rounded-xl bg-card border border-border shadow-sm flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full mt-1.5 shrink-0 bg-danger" />
+                <div>
+                  <h4 className="text-sm font-semibold text-text-primary">Overdue Maintenance</h4>
+                  <p className="text-xs text-text-secondary mt-0.5 leading-relaxed">
+                    Vehicle {log.vehicle?.registrationNumber || 'Unknown'} has been in repair since {new Date(log.startedAt).toLocaleDateString()}.
+                  </p>
                 </div>
               </div>
             ))}
-          </div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="bg-card border border-border rounded-[16px] p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-text-primary">Driver Leaderboard</h2>
-            <Users className="w-4 h-4 text-text-muted" />
-          </div>
-          <div className="space-y-3">
-            {["Sarah Smith", "Mike Johnson", "Emma Davis"].map((name, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-xl bg-background-secondary border border-border">
-                <div className="flex items-center gap-3">
-                  <img src={`https://api.dicebear.com/7.x/notionists/svg?seed=${name}&backgroundColor=e9e2d8`} alt={name} className="w-9 h-9 rounded-full border border-border" />
-                  <div>
-                    <p className="text-sm font-semibold text-text-primary">{name}</p>
-                    <p className="text-xs text-text-muted">{99 - i}% Safety Score</p>
-                  </div>
-                </div>
-                <div className="w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center border border-primary/20">
-                  {i + 1}
-                </div>
+            {(!alerts?.expiringLicenses?.length && !alerts?.overdueMaintenance?.length) && (
+              <div className="p-4 rounded-xl bg-card border border-dashed border-border shadow-sm text-center text-xs text-text-muted">
+                No active operational alerts. Everything looks good!
               </div>
-            ))}
-          </div>
-        </motion.div>
-
-        <motion.div variants={itemVariants} className="bg-card border border-border rounded-[16px] p-5 shadow-[var(--shadow-card)]">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-bold text-text-primary">Fuel Analytics</h2>
-            <Fuel className="w-4 h-4 text-text-muted" />
-          </div>
-          <div className="space-y-3">
-            {[["TX-984-Z", "78%", "Good"], ["CA-332-A", "62%", "Avg"], ["NY-102-X", "45%", "Low"]].map(([reg, pct, label]) => (
-              <div key={reg} className="flex items-center gap-3">
-                <p className="text-xs font-mono text-text-muted w-20 shrink-0">{reg}</p>
-                <div className="flex-1 h-2 bg-background-secondary rounded-full overflow-hidden">
-                  <div className="h-full rounded-full bg-primary" style={{ width: pct }} />
-                </div>
-                <span className="text-xs font-semibold text-text-secondary w-12 text-right">{pct} {label}</span>
-              </div>
-            ))}
+            )}
           </div>
         </motion.div>
       </div>

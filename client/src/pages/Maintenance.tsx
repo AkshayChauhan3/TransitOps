@@ -6,23 +6,26 @@ import * as z from 'zod';
 import axiosClient from '../api/axiosClient';
 import type { MaintenanceLog, Vehicle } from '../types';
 import { useToast } from '../context/ToastContext';
+import { useAuth } from '../context/AuthContext';
 import { TableSkeleton } from '../components/Skeletons';
 import { Plus, Wrench, CheckCircle2, Calendar, DollarSign, X } from 'lucide-react';
 
 const maintenanceSchema = z.object({
-  vehicleId: z.string().min(1, 'Vehicle is required'),
-  description: z.string().min(5, 'Description must be at least 5 characters'),
+  vehicleId: z.coerce.number().int().positive('Vehicle is required'),
+  serviceType: z.string().min(1, 'Service type is required'),
+  description: z.string().optional(),
   cost: z.number().nonnegative('Cost must be positive or zero'),
 });
 
 const closeMaintenanceSchema = z.object({
-  finalCost: z.number().nonnegative('Final cost must be positive or zero'),
+  technicianName: z.string().min(1, 'Technician name is required'),
 });
 
 type MaintenanceFormValues = z.infer<typeof maintenanceSchema>;
 type CloseFormValues = z.infer<typeof closeMaintenanceSchema>;
 
 export const Maintenance: React.FC = () => {
+  const { user } = useAuth();
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
@@ -44,17 +47,23 @@ export const Maintenance: React.FC = () => {
   });
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<MaintenanceFormValues>({
-    resolver: zodResolver(maintenanceSchema),
-    defaultValues: { vehicleId: '', description: '', cost: 0 },
+    resolver: zodResolver(maintenanceSchema) as any,
+    defaultValues: { vehicleId: 0, serviceType: 'Routine Maintenance', description: '', cost: 0 },
   });
 
   const { register: registerClose, handleSubmit: handleSubmitClose, reset: resetClose, formState: { errors: errorsClose } } = useForm<CloseFormValues>({
     resolver: zodResolver(closeMaintenanceSchema),
-    defaultValues: { finalCost: 0 },
+    defaultValues: { technicianName: '' },
   });
 
   const startMutation = useMutation({
-    mutationFn: (data: MaintenanceFormValues) => axiosClient.post('/maintenance', data),
+    mutationFn: (data: MaintenanceFormValues) => {
+      return axiosClient.post('/maintenance', {
+        ...data,
+        branchId: user?.branchId || 1,
+        date: new Date().toISOString(),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
@@ -62,12 +71,12 @@ export const Maintenance: React.FC = () => {
       setIsStartOpen(false);
       reset();
     },
-    onError: (error: any) => showToast(error.response?.data?.message || 'Failed to log maintenance', 'error'),
+    onError: (error: any) => showToast(error.response?.data?.error?.message || error.response?.data?.message || 'Failed to log maintenance', 'error'),
   });
 
   const closeMutation = useMutation({
-    mutationFn: ({ id, finalCost }: { id: string; finalCost: number }) =>
-      axiosClient.post(`/maintenance/${id}/close`, { cost: finalCost }),
+    mutationFn: ({ id, technicianName }: { id: number; technicianName: string }) =>
+      axiosClient.post(`/maintenance/${id}/close`, { technicianName }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['maintenance'] });
       queryClient.invalidateQueries({ queryKey: ['vehicles'] });
@@ -75,12 +84,12 @@ export const Maintenance: React.FC = () => {
       setClosingLog(null);
       resetClose();
     },
-    onError: (error: any) => showToast(error.response?.data?.message || 'Failed to close maintenance', 'error'),
+    onError: (error: any) => showToast(error.response?.data?.error?.message || error.response?.data?.message || 'Failed to close maintenance', 'error'),
   });
 
   const handleOpenCloseModal = (log: MaintenanceLog) => {
     setClosingLog(log);
-    resetClose({ finalCost: log.cost });
+    resetClose({ technicianName: '' });
   };
 
   const inputStyle = (hasError?: boolean): React.CSSProperties => ({
@@ -126,6 +135,7 @@ export const Maintenance: React.FC = () => {
               <thead>
                 <tr>
                   <th>Vehicle</th>
+                  <th>Service Type</th>
                   <th>Description</th>
                   <th>Status</th>
                   <th>Cost</th>
@@ -139,12 +149,15 @@ export const Maintenance: React.FC = () => {
                     <td style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
                       {log.vehicle?.registrationNumber || 'Unknown'}
                     </td>
-                    <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={log.description}>
-                      {log.description}
+                    <td style={{ color: 'var(--text-primary)', fontWeight: 600 }}>
+                      {log.serviceType}
+                    </td>
+                    <td style={{ maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--text-secondary)' }} title={log.description || ''}>
+                      {log.description || 'No description'}
                     </td>
                     <td>
-                      <span className={log.status === 'ACTIVE' ? 'badge badge-warning' : 'badge badge-success'}>
-                        {log.status === 'ACTIVE' ? 'In Repair' : 'Closed'}
+                      <span className={log.status === 'PENDING' ? 'badge badge-warning' : 'badge badge-success'}>
+                        {log.status === 'PENDING' ? 'In Repair' : 'Closed'}
                       </span>
                     </td>
                     <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
@@ -153,11 +166,11 @@ export const Maintenance: React.FC = () => {
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)' }}>
                         <Calendar size={12} strokeWidth={1.75} />
-                        {new Date(log.startDate).toLocaleDateString()}
+                        {log.startedAt ? new Date(log.startedAt).toLocaleDateString() : '–'}
                       </div>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      {log.status === 'ACTIVE' ? (
+                      {log.status === 'PENDING' ? (
                         <button
                           onClick={() => handleOpenCloseModal(log)}
                           className="btn btn-md"
@@ -167,7 +180,7 @@ export const Maintenance: React.FC = () => {
                           Close Log
                         </button>
                       ) : (
-                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Completed</span>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic' }}>Completed by {log.technicianName}</span>
                       )}
                     </td>
                   </tr>
@@ -187,17 +200,30 @@ export const Maintenance: React.FC = () => {
               <button onClick={() => setIsStartOpen(false)} className="btn btn-ghost btn-icon"><X size={16} strokeWidth={1.75} /></button>
             </div>
 
-            <form onSubmit={handleSubmit(data => startMutation.mutate(data))} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <form onSubmit={handleSubmit(data => startMutation.mutate(data as MaintenanceFormValues))} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
                 <label style={labelStyle}>Select Vehicle</label>
                 <select {...register('vehicleId')} style={inputStyle(!!errors.vehicleId)}>
                   <option value="">Choose available vehicle…</option>
                   {vehicles?.map(v => (
-                    <option key={v.id} value={v.id}>{v.registrationNumber} ({v.model}) — {v.region}</option>
+                    <option key={v.id} value={v.id}>{v.registrationNumber} ({v.model})</option>
                   ))}
                 </select>
                 {errors.vehicleId && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.vehicleId.message}</p>}
                 <p style={{ margin: '5px 0 0', fontSize: 11, color: 'var(--text-muted)' }}>Only AVAILABLE vehicles are shown.</p>
+              </div>
+
+              <div>
+                <label style={labelStyle}>Service Type</label>
+                <select {...register('serviceType')} style={inputStyle(!!errors.serviceType)}>
+                  <option value="Routine Maintenance">Routine Maintenance</option>
+                  <option value="Engine Repair">Engine Repair</option>
+                  <option value="Tire Replacement">Tire Replacement</option>
+                  <option value="Brake Overhaul">Brake Overhaul</option>
+                  <option value="Electrical Repair">Electrical Repair</option>
+                  <option value="Body Work">Body Work</option>
+                </select>
+                {errors.serviceType && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errors.serviceType.message}</p>}
               </div>
 
               <div>
@@ -240,14 +266,11 @@ export const Maintenance: React.FC = () => {
               <button onClick={() => setClosingLog(null)} className="btn btn-ghost btn-icon"><X size={16} strokeWidth={1.75} /></button>
             </div>
 
-            <form onSubmit={handleSubmitClose(data => { if (closingLog) closeMutation.mutate({ id: closingLog.id, finalCost: data.finalCost }); })} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <form onSubmit={handleSubmitClose(data => { if (closingLog) closeMutation.mutate({ id: closingLog.id, technicianName: data.technicianName }); })} style={{ padding: '22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={labelStyle}>Final Settlement Cost ($)</label>
-                <div style={{ position: 'relative' }}>
-                  <DollarSign size={13} strokeWidth={1.75} style={{ position: 'absolute', left: 11, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                  <input type="number" step="0.01" {...registerClose('finalCost', { valueAsNumber: true })} style={{ ...inputStyle(!!errorsClose.finalCost), paddingLeft: 30 }} />
-                </div>
-                {errorsClose.finalCost && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsClose.finalCost.message}</p>}
+                <label style={labelStyle}>Technician Name</label>
+                <input type="text" {...registerClose('technicianName')} style={inputStyle(!!errorsClose.technicianName)} placeholder="e.g. John Doe" />
+                {errorsClose.technicianName && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsClose.technicianName.message}</p>}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 8, borderTop: '1px solid var(--border)' }}>

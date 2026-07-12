@@ -72,7 +72,7 @@ export const App: React.FC = () => {
                 <Route
                   path="maintenance"
                   element={
-                    <ProtectedRoute allowedRoles={['FLEET_MANAGER']}>
+                    <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER']}>
                       <Maintenance />
                     </ProtectedRoute>
                   }
@@ -80,7 +80,7 @@ export const App: React.FC = () => {
                 <Route
                   path="expenses"
                   element={
-                    <ProtectedRoute allowedRoles={['FLEET_MANAGER', 'FINANCIAL_ANALYST']}>
+                    <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER', 'FINANCIAL_ANALYST']}>
                       <Expenses />
                     </ProtectedRoute>
                   }
@@ -88,7 +88,7 @@ export const App: React.FC = () => {
                 <Route
                   path="reports"
                   element={
-                    <ProtectedRoute allowedRoles={['FLEET_MANAGER', 'FINANCIAL_ANALYST']}>
+                    <ProtectedRoute allowedRoles={['SUPER_ADMIN', 'BRANCH_ADMIN', 'FLEET_MANAGER', 'FINANCIAL_ANALYST']}>
                       <Reports />
                     </ProtectedRoute>
                   }

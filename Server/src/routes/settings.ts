@@ -11,14 +11,14 @@ router.use(authenticateToken);
 // GET /settings - Get branch settings
 router.get('/', requirePermission('settings', 'view'), async (req, res, next) => {
   try {
-    const branchId = req.user!.role === 'SUPER_ADMIN' ? parseInt(req.query.branchId as string, 10) : req.user!.branchId!;
+    const branchId = req.user!.role === 'SUPER_ADMIN' ? parseInt(req.query.branchId as string) : req.user!.branchId!;
     
     if (!branchId) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Super Admins must provide ?branchId' } });
     }
 
     const branch = await prisma.branch.findUnique({
-      where: { id: branchId }
+      where: { id: Number(branchId) }
     });
 
     if (!branch || branch.deletedAt) {
@@ -34,19 +34,19 @@ router.get('/', requirePermission('settings', 'view'), async (req, res, next) =>
 // PUT /settings - Update branch settings
 router.put('/', requirePermission('settings', 'update'), validate(updateBranchSchema), async (req, res, next) => {
   try {
-    const branchId = req.user!.role === 'SUPER_ADMIN' ? parseInt(req.query.branchId as string, 10) : req.user!.branchId!;
+    const branchId = req.user!.role === 'SUPER_ADMIN' ? parseInt(req.query.branchId as string) : req.user!.branchId!;
     
     if (!branchId) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Super Admins must provide ?branchId' } });
     }
 
-    const branch = await prisma.branch.findUnique({ where: { id: branchId } });
+    const branch = await prisma.branch.findUnique({ where: { id: Number(branchId) } });
     if (!branch || branch.deletedAt) {
       return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Branch not found' } });
     }
 
     const updated = await prisma.branch.update({
-      where: { id: branchId },
+      where: { id: Number(branchId) },
       data: req.body
     });
 

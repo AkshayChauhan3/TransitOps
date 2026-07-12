@@ -9,7 +9,7 @@ import { useToast } from '../context/ToastContext';
 import { Flame, DollarSign, Calculator, FileText, Clock, Plus } from 'lucide-react';
 
 const fuelSchema = z.object({
-  vehicleId: z.string().min(1, 'Vehicle is required'),
+  vehicleId: z.coerce.number().int().positive('Vehicle is required'),
   liters: z.number().positive('Liters must be a positive number'),
   cost: z.number().positive('Cost must be positive'),
   date: z.string().min(1, 'Date is required'),
@@ -17,11 +17,10 @@ const fuelSchema = z.object({
 });
 
 const expenseSchema = z.object({
-  vehicleId: z.string().min(1, 'Vehicle is required'),
-  type: z.enum(['TOLL', 'MAINTENANCE', 'OTHER']),
+  vehicleId: z.coerce.number().int().positive('Vehicle is required'),
+  type: z.enum(['TOLL', 'FUEL', 'MAINTENANCE', 'OTHER']),
   amount: z.number().positive('Amount must be positive'),
   date: z.string().min(1, 'Date is required'),
-  description: z.string().min(3, 'Description must be at least 3 characters'),
 });
 
 type FuelFormValues = z.infer<typeof fuelSchema>;
@@ -41,38 +40,53 @@ export const Expenses: React.FC = () => {
 
   const { data: costSummary, isLoading: costLoading } = useQuery<OperationalCostSummary>({
     queryKey: ['operational-cost', selectedCostVehicleId],
-    queryFn: async () => (await axiosClient.get(`/operational-cost/${selectedCostVehicleId}`)).data,
+    queryFn: async () => (await axiosClient.get(`/finance/vehicles/${selectedCostVehicleId}/operational-cost`)).data,
     enabled: !!selectedCostVehicleId,
   });
 
   const { register: registerFuel, handleSubmit: handleSubmitFuel, reset: resetFuel, formState: { errors: errorsFuel } } = useForm<FuelFormValues>({
-    resolver: zodResolver(fuelSchema),
-    defaultValues: { vehicleId: '', liters: 0, cost: 0, date: new Date().toISOString().split('T')[0], tripId: '' },
+    resolver: zodResolver(fuelSchema) as any,
+    defaultValues: { vehicleId: 0, liters: 0, cost: 0, date: new Date().toISOString().split('T')[0], tripId: '' },
   });
 
   const { register: registerExpense, handleSubmit: handleSubmitExpense, reset: resetExpense, formState: { errors: errorsExpense } } = useForm<ExpenseFormValues>({
-    resolver: zodResolver(expenseSchema),
-    defaultValues: { vehicleId: '', type: 'TOLL', amount: 0, date: new Date().toISOString().split('T')[0], description: '' },
+    resolver: zodResolver(expenseSchema) as any,
+    defaultValues: { vehicleId: 0, type: 'TOLL', amount: 0, date: new Date().toISOString().split('T')[0] },
   });
 
   const logFuelMutation = useMutation({
-    mutationFn: (data: FuelFormValues) => axiosClient.post('/fuel-logs', data),
+    mutationFn: (data: FuelFormValues) => {
+      return axiosClient.post('/finance/fuel-logs', {
+        vehicleId: data.vehicleId,
+        liters: data.liters,
+        cost: data.cost,
+        date: new Date(data.date).toISOString(),
+        tripId: data.tripId ? parseInt(data.tripId) : undefined,
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['operational-cost'] });
-      showToast('Fuel log recorded', 'success');
-      resetFuel({ vehicleId: '', liters: 0, cost: 0, date: new Date().toISOString().split('T')[0], tripId: '' });
+      showToast('Fuel log recorded successfully', 'success');
+      resetFuel({ vehicleId: 0, liters: 0, cost: 0, date: new Date().toISOString().split('T')[0], tripId: '' });
     },
-    onError: (error: any) => showToast(error.response?.data?.message || 'Failed to record fuel log', 'error'),
+    onError: (error: any) => showToast(error.response?.data?.error?.message || error.response?.data?.message || 'Failed to record fuel log', 'error'),
   });
 
   const logExpenseMutation = useMutation({
-    mutationFn: (data: ExpenseFormValues) => axiosClient.post('/expenses', data),
+    mutationFn: (data: ExpenseFormValues) => {
+      return axiosClient.post('/finance/expenses', {
+        vehicleId: data.vehicleId,
+        type: data.type,
+        amount: data.amount,
+        date: new Date(data.date).toISOString(),
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['operational-cost'] });
-      showToast('Expense recorded', 'success');
-      resetExpense({ vehicleId: '', type: 'TOLL', amount: 0, date: new Date().toISOString().split('T')[0], description: '' });
+      showToast('Expense recorded successfully', 'success');
+      resetExpense({ vehicleId: 0, type: 'TOLL', amount: 0, date: new Date().toISOString().split('T')[0] });
     },
-    onError: (error: any) => showToast(error.response?.data?.message || 'Failed to record expense', 'error'),
+    onError: (error: any) => showToast(error.response?.data?.error?.message || error.response?.data?.message || 'Failed to record expense', 'error'),
   });
 
   const inputStyle = (hasError?: boolean): React.CSSProperties => ({
@@ -127,7 +141,7 @@ export const Expenses: React.FC = () => {
       </div>
 
       {/* Main area */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }} className="lg:grid-cols-[1fr_280px]">
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 20 }}>
 
         {/* Form panel */}
         <div>
@@ -139,7 +153,7 @@ export const Expenses: React.FC = () => {
                 <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Log Fuel Entry</h3>
               </div>
 
-              <form onSubmit={handleSubmitFuel(data => logFuelMutation.mutate({ ...data, tripId: data.tripId || undefined }))} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <form onSubmit={handleSubmitFuel(data => logFuelMutation.mutate(data as FuelFormValues))} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label style={labelStyle}>Vehicle</label>
@@ -190,9 +204,9 @@ export const Expenses: React.FC = () => {
                 <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Log General Expense</h3>
               </div>
 
-              <form onSubmit={handleSubmitExpense(data => logExpenseMutation.mutate(data))} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <form onSubmit={handleSubmitExpense(data => logExpenseMutation.mutate(data as ExpenseFormValues))} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <div>
+                  <div style={{ gridColumn: '1 / -1' }}>
                     <label style={labelStyle}>Vehicle</label>
                     <select {...registerExpense('vehicleId')} style={inputStyle(!!errorsExpense.vehicleId)}>
                       <option value="">Choose vehicle…</option>
@@ -204,7 +218,8 @@ export const Expenses: React.FC = () => {
                     <label style={labelStyle}>Category</label>
                     <select {...registerExpense('type')} style={inputStyle()}>
                       <option value="TOLL">Highway Toll</option>
-                      <option value="MAINTENANCE">Maintenance / Repair</option>
+                      <option value="FUEL">Fuel</option>
+                      <option value="MAINTENANCE">Maintenance</option>
                       <option value="OTHER">Other</option>
                     </select>
                   </div>
@@ -221,11 +236,6 @@ export const Expenses: React.FC = () => {
                     <input type="date" {...registerExpense('date')} style={inputStyle(!!errorsExpense.date)} />
                     {errorsExpense.date && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsExpense.date.message}</p>}
                   </div>
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label style={labelStyle}>Description</label>
-                    <input type="text" {...registerExpense('description')} style={inputStyle(!!errorsExpense.description)} placeholder="e.g. Annual emissions inspection, toll recharge…" />
-                    {errorsExpense.description && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#f87171' }}>{errorsExpense.description.message}</p>}
-                  </div>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
                   <button type="submit" disabled={logExpenseMutation.isPending} className="btn btn-primary btn-lg">
@@ -241,7 +251,7 @@ export const Expenses: React.FC = () => {
           {activeTab === 'cost' && (
             <div className="card reveal reveal-3" style={{ padding: '22px 24px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20 }}>
-                <Calculator size={16} strokeWidth={1.75} style={{ color: 'var(--color-accent-h)' }} />
+                <Calculator size={16} strokeWidth={1.75} style={{ color: 'var(--color-interactive)' }} />
                 <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Operational Cost by Vehicle</h3>
               </div>
 
@@ -261,18 +271,18 @@ export const Expenses: React.FC = () => {
                 ) : costSummary && selectedCostVehicleId ? (
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     {[
-                      { label: 'Fuel Costs', value: costSummary.fuelCost, icon: <Flame size={16} strokeWidth={1.75} />, color: '#fb923c' },
-                      { label: 'Maintenance', value: costSummary.maintenanceCost, icon: <Calculator size={16} strokeWidth={1.75} />, color: 'var(--color-interactive)' },
-                      { label: 'Other / Tolls', value: costSummary.otherCost, icon: <FileText size={16} strokeWidth={1.75} />, color: 'var(--text-muted)' },
+                      { label: 'Fuel Costs', value: costSummary.breakdown.fuel, icon: <Flame size={16} strokeWidth={1.75} />, color: '#fb923c' },
+                      { label: 'Maintenance', value: costSummary.breakdown.maintenance, icon: <Calculator size={16} strokeWidth={1.75} />, color: 'var(--color-interactive)' },
+                      { label: 'Other / Tolls', value: costSummary.breakdown.otherExpenses, icon: <FileText size={16} strokeWidth={1.75} />, color: 'var(--text-muted)' },
                     ].map(item => (
-                      <div key={item.label} className="el-3" style={{ borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div key={item.label} style={{ borderRadius: 12, padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid var(--border)', backgroundColor: 'var(--color-surface-2)' }}>
                         <div>
                           <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--text-muted)' }}>{item.label}</span>
                           <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginTop: 3 }}>
                             ${item.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                           </div>
                         </div>
-                        <div style={{ padding: 8, borderRadius: 9, backgroundColor: 'var(--color-surface)', border: '1px solid var(--border)', color: item.color }}>
+                        <div style={{ padding: 8, borderRadius: 9, backgroundColor: 'var(--background)', border: '1px solid var(--border)', color: item.color }}>
                           {item.icon}
                         </div>
                       </div>
@@ -281,7 +291,7 @@ export const Expenses: React.FC = () => {
                       <div>
                         <span style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--color-interactive)' }}>Total Cost</span>
                         <div style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.03em', marginTop: 3 }}>
-                          ${costSummary.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                          ${costSummary.totalOperationalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                         </div>
                       </div>
                       <div style={{ padding: 10, borderRadius: 10, backgroundColor: 'var(--color-interactive)', color: '#fff' }}>
@@ -303,7 +313,7 @@ export const Expenses: React.FC = () => {
         <div>
           <div className="card reveal reveal-4" style={{ padding: '18px 20px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 14 }}>
-              <Clock size={13} strokeWidth={1.75} style={{ color: 'var(--color-accent-h)' }} />
+              <Clock size={13} strokeWidth={1.75} style={{ color: 'var(--color-interactive)' }} />
               <h4 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Cost Rules</h4>
             </div>
             <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>

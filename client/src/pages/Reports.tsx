@@ -1,18 +1,27 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import axiosClient from '../api/axiosClient';
-import type { VehicleReportItem } from '../types';
 import { useToast } from '../context/ToastContext';
 import { TableSkeleton } from '../components/Skeletons';
 import { Download, FileSpreadsheet, ArrowUpRight, TrendingDown, Info } from 'lucide-react';
+
+interface VehicleROIReportItem {
+  vehicleId: number;
+  registration: string;
+  acquisitionCost: number;
+  totalRevenue: number;
+  totalCosts: number;
+  netProfit: number;
+  roiPercentage: number;
+}
 
 export const Reports: React.FC = () => {
   const { showToast } = useToast();
   const [isExporting, setIsExporting] = useState(false);
 
-  const { data: reports, isLoading, isError } = useQuery<VehicleReportItem[]>({
-    queryKey: ['reports-vehicles'],
-    queryFn: async () => (await axiosClient.get('/reports/vehicles')).data,
+  const { data: reports, isLoading, isError } = useQuery<VehicleROIReportItem[]>({
+    queryKey: ['reports-roi'],
+    queryFn: async () => (await axiosClient.get('/reports/roi')).data,
   });
 
   const handleExportCSV = async () => {
@@ -20,7 +29,7 @@ export const Reports: React.FC = () => {
     try {
       const token = localStorage.getItem('transitops_token');
       const response = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api'}/reports/vehicles/export.csv`,
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3000/api'}/reports/roi?format=csv`,
         { method: 'GET', headers: { 'Authorization': `Bearer ${token}` } }
       );
       if (!response.ok) throw new Error('Could not download CSV file');
@@ -28,7 +37,7 @@ export const Reports: React.FC = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `TransitOps_Vehicles_Report_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `TransitOps_ROI_Report_${new Date().toISOString().split('T')[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
@@ -66,15 +75,15 @@ export const Reports: React.FC = () => {
       {/* Info panel */}
       <div className="card reveal reveal-2" style={{ padding: '18px 22px', display: 'flex', flexDirection: 'column', gap: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-          <FileSpreadsheet size={16} strokeWidth={1.75} style={{ color: 'var(--color-accent-h)', flexShrink: 0 }} />
-          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Aggregated Fleet Report</span>
+          <FileSpreadsheet size={16} strokeWidth={1.75} style={{ color: 'var(--color-interactive)', flexShrink: 0 }} />
+          <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>Vehicle ROI Report</span>
         </div>
         <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.7, maxWidth: 700 }}>
-          Consolidated view of vehicle performance metrics — fuel efficiency, utilization rates, operational costs, and financial ROI ratios derived from dispatch and maintenance logs.
+          Consolidated view of vehicle financial metrics — acquisition costs, accumulated revenues, operational costs, and Net profit ROI percentages derived from dispatch, fuel logging, and maintenance log data.
         </p>
         <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 10px', backgroundColor: 'var(--color-surface-2)', border: '1px solid var(--border)', borderRadius: 8, marginTop: 4, width: 'fit-content' }}>
           <Info size={12} strokeWidth={2} style={{ color: 'var(--text-muted)' }} />
-          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Data compiled from real-time dispatch and activity logs</span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>Data compiled from real-time operational log modules</span>
         </div>
       </div>
 
@@ -83,12 +92,12 @@ export const Reports: React.FC = () => {
         <TableSkeleton rows={5} />
       ) : isError ? (
         <div className="card" style={{ padding: 24, textAlign: 'center', color: '#f87171', border: '1px solid rgba(239,68,68,0.2)' }}>
-          Failed to retrieve vehicle report metrics.
+          Failed to retrieve vehicle ROI report metrics.
         </div>
       ) : reports?.length === 0 ? (
         <div className="card" style={{ padding: 48, textAlign: 'center' }}>
           <FileSpreadsheet size={28} strokeWidth={1.5} style={{ color: 'var(--text-muted)', margin: '0 auto 10px' }} />
-          <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-muted)' }}>No performance metrics generated yet</p>
+          <p style={{ margin: 0, fontWeight: 600, color: 'var(--text-muted)' }}>No ROI metrics generated yet</p>
         </div>
       ) : (
         <div className="card reveal reveal-3" style={{ overflow: 'hidden' }}>
@@ -97,41 +106,37 @@ export const Reports: React.FC = () => {
               <thead>
                 <tr>
                   <th>Registration</th>
-                  <th>Model</th>
-                  <th>Fuel Efficiency</th>
-                  <th>Utilization</th>
-                  <th>Operational Cost</th>
-                  <th>ROI</th>
+                  <th>Acquisition Cost</th>
+                  <th>Total Revenue</th>
+                  <th>Total Costs</th>
+                  <th>Net Profit</th>
+                  <th>ROI Percentage</th>
                 </tr>
               </thead>
               <tbody>
                 {reports?.map(item => (
-                  <tr key={item.id}>
+                  <tr key={item.vehicleId}>
                     <td style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: 12 }}>
-                      {item.registrationNumber}
-                    </td>
-                    <td style={{ color: 'var(--text-secondary)' }}>{item.model}</td>
-                    <td>
-                      <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{item.fuelEfficiency.toFixed(2)}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>km/L</span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 48, height: 4, backgroundColor: 'var(--color-surface-2)', borderRadius: 99, overflow: 'hidden', flexShrink: 0 }}>
-                          <div style={{ height: '100%', width: `${item.fleetUtilizationPercent}%`, backgroundColor: 'var(--color-interactive)', borderRadius: 99 }} />
-                        </div>
-                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)' }}>{item.fleetUtilizationPercent}%</span>
-                      </div>
+                      {item.registration}
                     </td>
                     <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                      ${item.operationalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      ${item.acquisitionCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      ${item.totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                      ${item.totalCosts.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                    <td style={{ fontWeight: 600, color: item.netProfit >= 0 ? '#34d399' : '#f87171' }}>
+                      ${item.netProfit.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ fontWeight: 700, color: item.roi >= 1 ? '#34d399' : '#fbbf24', fontSize: 13 }}>
-                          {item.roi.toFixed(2)}x
+                        <span style={{ fontWeight: 700, color: item.roiPercentage >= 0 ? '#34d399' : '#fbbf24', fontSize: 13 }}>
+                          {item.roiPercentage.toFixed(2)}%
                         </span>
-                        {item.roi >= 1
+                        {item.roiPercentage >= 0
                           ? <ArrowUpRight size={13} strokeWidth={2} style={{ color: '#34d399' }} />
                           : <TrendingDown size={13} strokeWidth={2} style={{ color: '#fbbf24' }} />
                         }

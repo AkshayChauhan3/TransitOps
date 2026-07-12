@@ -29,7 +29,7 @@ export const createBranchSchema = z.object({
   city: z.string().min(1, "City is required"),
   state: z.string().min(1, "State is required"),
   contactNumber: z.string().min(1, "Contact number is required"),
-  adminId: z.string().uuid("Invalid admin ID").optional()
+  adminId: z.coerce.number().int().positive("Invalid admin ID").optional()
 });
 
 export const updateBranchSchema = createBranchSchema.partial();
@@ -42,10 +42,10 @@ export const createVehicleSchema = z.object({
   name: z.string().min(1, "Vehicle name is required"),
   model: z.string().min(1, "Model is required"),
   type: z.string().min(1, "Vehicle type is required"),
-  maxLoadCapacity: z.number().positive("Capacity must be positive"),
-  odometer: z.number().nonnegative("Odometer cannot be negative"),
-  acquisitionCost: z.number().nonnegative("Cost cannot be negative"),
-  branchId: z.string().uuid("Invalid branch ID"), // Added in v3
+  maxLoadCapacity: z.coerce.number().positive("Capacity must be positive"),
+  odometer: z.coerce.number().nonnegative("Odometer cannot be negative"),
+  acquisitionCost: z.coerce.number().nonnegative("Cost cannot be negative"),
+  branchId: z.coerce.number().int().positive("Invalid branch ID"),
 });
 
 export const updateVehicleSchema = createVehicleSchema.partial().extend({
@@ -61,8 +61,8 @@ export const createDriverSchema = z.object({
   licenseCategory: z.string().min(1, "License category is required"),
   licenseExpiryDate: z.string().refine((val) => !isNaN(Date.parse(val)), { message: "Invalid date format" }),
   contactNumber: z.string().min(1, "Contact number is required"),
-  safetyScore: z.number().min(0).max(100, "Score must be between 0 and 100"),
-  branchId: z.string().uuid("Invalid branch ID"), // Added in v3
+  safetyScore: z.coerce.number().min(0).max(100, "Score must be between 0 and 100"),
+  branchId: z.coerce.number().int().positive("Invalid branch ID"),
 });
 
 export const updateDriverSchema = createDriverSchema.partial().extend({
@@ -75,42 +75,42 @@ export const updateDriverSchema = createDriverSchema.partial().extend({
 export const createTripSchema = z.object({
   source: z.string().min(1, "Source is required"),
   destination: z.string().min(1, "Destination is required"),
-  cargoWeight: z.number().positive("Cargo weight must be positive"),
-  plannedDistance: z.number().positive("Planned distance must be positive"),
-  vehicleId: z.string().uuid("Invalid vehicle ID").optional(),
-  driverId: z.string().uuid("Invalid driver ID").optional(),
-  branchId: z.string().uuid("Invalid branch ID"), // Added in v3
+  cargoWeight: z.coerce.number().positive("Cargo weight must be positive"),
+  plannedDistance: z.coerce.number().positive("Planned distance must be positive"),
+  vehicleId: z.coerce.number().int().positive("Invalid vehicle ID").optional(),
+  driverId: z.coerce.number().int().positive("Invalid driver ID").optional(),
+  branchId: z.coerce.number().int().positive("Invalid branch ID"),
 });
 
 export const updateTripSchema = createTripSchema.partial();
 
 export const dispatchTripSchema = z.object({
-  vehicleId: z.string().uuid("Invalid vehicle ID"),
-  driverId: z.string().uuid("Invalid driver ID")
+  vehicleId: z.coerce.number().int().positive("Invalid vehicle ID"),
+  driverId: z.coerce.number().int().positive("Invalid driver ID")
 });
 
 export const completeTripSchema = z.object({
-  finalOdometer: z.number().positive("Final odometer must be positive"),
-  actualDistance: z.number().positive("Actual distance must be positive").optional(),
-  revenue: z.number().nonnegative("Revenue cannot be negative").optional()
+  finalOdometer: z.coerce.number().positive("Final odometer must be positive"),
+  actualDistance: z.coerce.number().positive("Actual distance must be positive").optional(),
+  revenue: z.coerce.number().nonnegative("Revenue cannot be negative").optional()
 });
 
 // ==========================================
 // Maintenance Schemas
 // ==========================================
 export const openMaintenanceSchema = z.object({
-  vehicleId: z.string().uuid("Invalid vehicle ID"),
-  branchId: z.string().uuid("Invalid branch ID"), // Added in v3
+  vehicleId: z.coerce.number().int().positive("Invalid vehicle ID"),
+  branchId: z.coerce.number().int().positive("Invalid branch ID"),
   serviceType: z.string().min(1, "Service type is required"),
   description: z.string().optional(),
-  cost: z.number().nonnegative("Cost cannot be negative"),
+  cost: z.coerce.number().nonnegative("Cost cannot be negative"),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date format"),
 });
 
 export const updateMaintenanceSchema = z.object({
   status: z.nativeEnum(MaintenanceStatus),
   technicianName: z.string().optional(),
-  cost: z.number().nonnegative().optional()
+  cost: z.coerce.number().nonnegative().optional()
 });
 
 export const closeMaintenanceSchema = z.object({
@@ -121,20 +121,20 @@ export const closeMaintenanceSchema = z.object({
 // Fuel & Expenses Schemas
 // ==========================================
 export const createFuelLogSchema = z.object({
-  vehicleId: z.string().uuid("Invalid vehicle ID"),
-  tripId: z.string().uuid("Invalid trip ID").optional(),
-  liters: z.number().positive("Liters must be positive"),
-  cost: z.number().nonnegative("Cost cannot be negative"),
+  vehicleId: z.coerce.number().int().positive("Invalid vehicle ID"),
+  tripId: z.coerce.number().int().positive("Invalid trip ID").optional(),
+  liters: z.coerce.number().positive("Liters must be positive"),
+  cost: z.coerce.number().nonnegative("Cost cannot be negative"),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date format"),
   fuelStation: z.string().optional(),
   receiptNo: z.string().optional(),
 });
 
 export const createExpenseSchema = z.object({
-  vehicleId: z.string().uuid("Invalid vehicle ID"),
-  tripId: z.string().uuid("Invalid trip ID").optional(),
+  vehicleId: z.coerce.number().int().positive("Invalid vehicle ID"),
+  tripId: z.coerce.number().int().positive("Invalid trip ID").optional(),
   type: z.nativeEnum(ExpenseType),
-  amount: z.number().positive("Amount must be positive"),
+  amount: z.coerce.number().positive("Amount must be positive"),
   date: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid date format"),
 });
 

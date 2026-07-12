@@ -16,10 +16,10 @@ const rolePermissions: Record<Role, Partial<Record<Resource, Action[]>>> = {
     users: ['view', 'create', 'update', 'delete']
   },
   BRANCH_ADMIN: {
-    fleet: [],
-    drivers: [],
-    trips: ['view', 'create'],
-    finance: [],
+    fleet: ['view', 'create', 'update', 'delete'],
+    drivers: ['view', 'create', 'update', 'delete'],
+    trips: ['view', 'create', 'update', 'delete'],
+    finance: ['view', 'create', 'update', 'delete'],
     analytics: ['view'],
     settings: ['view', 'update'],
     users: ['view', 'create', 'update', 'delete']
@@ -27,7 +27,7 @@ const rolePermissions: Record<Role, Partial<Record<Resource, Action[]>>> = {
   FLEET_MANAGER: {
     fleet: ['view', 'create', 'update', 'delete'],
     drivers: ['view'],
-    trips: [], // FM doesn't dispatch trips directly
+    trips: ['view'], 
     finance: ['view', 'create', 'update', 'delete'], 
     analytics: ['view'],
     settings: ['view', 'update'],
@@ -36,25 +36,25 @@ const rolePermissions: Record<Role, Partial<Record<Resource, Action[]>>> = {
   DISPATCHER: {
     fleet: ['view'],
     drivers: ['view'],
-    trips: ['view', 'create', 'update', 'delete'], // Can dispatch
-    finance: [],
-    analytics: [],
+    trips: ['view', 'create', 'update', 'delete'],
+    finance: ['view', 'create'],
+    analytics: ['view'],
     settings: [],
     users: []
   },
   SAFETY_OFFICER: {
-    fleet: [],
-    drivers: ['view', 'create', 'update', 'delete'], // Suspensions, renewals
+    fleet: ['view'],
+    drivers: ['view', 'create', 'update', 'delete'],
     trips: ['view'],
-    finance: [],
-    analytics: [],
+    finance: ['view'],
+    analytics: ['view'],
     settings: [],
     users: []
   },
   FINANCIAL_ANALYST: {
     fleet: ['view'],
-    drivers: [],
-    trips: [],
+    drivers: ['view'],
+    trips: ['view'],
     finance: ['view', 'create', 'update', 'delete'],
     analytics: ['view'],
     settings: [],

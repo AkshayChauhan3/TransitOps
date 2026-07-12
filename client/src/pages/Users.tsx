@@ -174,7 +174,7 @@ export const Users: React.FC = () => {
                   </td>
                   <td>{u.branch?.name || 'Central / Software Provider'}</td>
                   <td>
-                    {currentUser?.id !== String(u.id) && (
+                    {currentUser?.id !== u.id && (
                       <div className="flex items-center gap-2">
                         {deleteConfirmId === u.id ? (
                           <div className="flex items-center gap-1.5">
