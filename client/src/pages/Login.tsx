@@ -195,27 +195,6 @@ export const Login: React.FC = () => {
             </button>
           </form>
         </div>
-
-        {/* Demo credentials */}
-        <div
-          className="reveal reveal-3"
-          style={{
-            marginTop: 16,
-            padding: '14px 18px',
-            backgroundColor: 'var(--color-surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 12,
-            textAlign: 'center',
-          }}
-        >
-          <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            Demo Credentials (password: password)
-          </p>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.8 }}>
-            <div>Fleet Manager: <span style={{ color: 'var(--color-accent-h)', fontWeight: 600 }}>manager@transitops.com</span></div>
-            <div>Driver: <span style={{ color: 'var(--color-accent-h)', fontWeight: 600 }}>driver@transitops.com</span></div>
-          </div>
-        </div>
       </div>
     </div>
   );
