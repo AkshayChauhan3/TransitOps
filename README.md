@@ -83,8 +83,10 @@ PORT=3000
    ```
 
 ### Default Logins (Development)
-- **Super Admin**: `admin@transitops.com` / `password123`
-- **Vadodara Branch Admin**: `vadodara@transitops.com` / `password123`
+- **Super Admin**: `super@transitops.com` / `password123`
+- **Vadodara Branch Admin**: `admin@vadodara.com` / `password123`
+- **Vadodara Fleet Manager**: `fleet@vadodara.com` / `password123`
+- **Vadodara Dispatcher**: `dispatch@vadodara.com` / `password123`
 
 ---
 
