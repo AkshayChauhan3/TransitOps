@@ -38,7 +38,7 @@ const rolePermissions: Record<Role, Partial<Record<Resource, Action[]>>> = {
     drivers: ['view'],
     trips: ['view', 'create', 'update', 'delete'],
     finance: ['view', 'create'],
-    analytics: ['view'],
+    analytics: [],
     settings: [],
     users: []
   },

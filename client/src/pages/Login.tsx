@@ -52,12 +52,12 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div style={{
+    <div className="dark" style={{
       minHeight: '100vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: 'var(--background)',
+      backgroundColor: '#000000',
       padding: '48px 16px',
       position: 'relative',
       overflow: 'hidden',
