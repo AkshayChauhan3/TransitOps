@@ -1,76 +1,71 @@
 import { Router } from 'express';
+import { prisma } from '../lib/prisma';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
-import { prisma } from '../lib/prisma';
 import { validate } from '../middleware/validate';
 import { loginSchema, refreshTokenSchema } from '../types';
 
 const router = Router();
 
-// Helper to generate tokens
-const generateTokens = (userId: string, role: string) => {
-  const accessSecret = process.env.JWT_SECRET || 'fallback_secret_for_dev';
-  const refreshSecret = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret_for_dev';
-
-  const accessToken = jwt.sign({ userId, role }, accessSecret, { expiresIn: '15m' });
-  const refreshToken = jwt.sign({ userId, role }, refreshSecret, { expiresIn: '7d' });
-
-  return { accessToken, refreshToken };
-};
+// Configurable lockout from env, default 30 mins
+const LOCKOUT_MINUTES = Number(process.env.LOGIN_LOCK_MINUTES || 30);
 
 router.post('/login', validate(loginSchema), async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) {
-      return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
+    const user = await prisma.user.findUnique({
+      where: { email }
+    });
+
+    // 1. Check if user exists and is not soft-deleted
+    if (!user || user.deletedAt !== null) {
+      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } });
     }
 
-    // 1. Check if account is currently locked
+    // 2. Check if locked out
     if (user.lockedUntil && user.lockedUntil > new Date()) {
-      return res.status(403).json({ error: { code: 'ACCOUNT_LOCKED', message: 'Account locked after 5 failed attempts. Try again later.' } });
+      return res.status(403).json({ error: { code: 'ACCOUNT_LOCKED', message: 'Account is locked due to too many failed attempts' } });
     }
 
-    // 2. Verify password
-    const isValid = await bcrypt.compare(password, user.passwordHash);
+    // 3. Verify password
+    const validPassword = await bcrypt.compare(password, user.passwordHash);
     
-    if (!isValid) {
-      // 3. Handle failed attempt and possible lockout
+    if (!validPassword) {
+      // Increment failed attempts
       const newAttempts = user.failedLoginAttempts + 1;
-      let lockedUntil = null;
+      const updates: any = { failedLoginAttempts: newAttempts };
       
       if (newAttempts >= 5) {
-        const lockMinutes = parseInt(process.env.LOGIN_LOCK_MINUTES || '30');
-        lockedUntil = new Date(Date.now() + lockMinutes * 60000);
+        updates.lockedUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60 * 1000);
       }
-
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { failedLoginAttempts: newAttempts, lockedUntil }
-      });
-
-      return res.status(401).json({ error: { code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' } });
+      
+      await prisma.user.update({ where: { id: user.id }, data: updates });
+      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid credentials' } });
     }
 
-    // 4. Success: Reset attempts and generate tokens
+    // 4. Success - reset lockouts
     await prisma.user.update({
       where: { id: user.id },
       data: { failedLoginAttempts: 0, lockedUntil: null }
     });
 
-    const { accessToken, refreshToken } = generateTokens(user.id, user.role);
+    // 5. Generate tokens (NOW INCLUDING BRANCH ID)
+    const payload = { userId: user.id, role: user.role, branchId: user.branchId };
+    
+    const accessToken = jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn: '15m' });
+    const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET || 'r_secret', { expiresIn: '7d' });
 
-    // Save refresh token to DB
+    // Store refresh token
     await prisma.refreshToken.create({
       data: {
-        token: refreshToken,
+        token: refreshToken, // ideally hashed in DB in production
         userId: user.id,
-        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       }
     });
 
-    res.json({ accessToken, refreshToken, user: { id: user.id, name: user.name, role: user.role } });
+    res.json({ accessToken, refreshToken });
   } catch (error) {
     next(error);
   }
@@ -79,39 +74,44 @@ router.post('/login', validate(loginSchema), async (req, res, next) => {
 router.post('/refresh', validate(refreshTokenSchema), async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
-    const refreshSecret = process.env.JWT_REFRESH_SECRET || 'fallback_refresh_secret_for_dev';
 
-    // Verify token exists and is not revoked in DB
-    const storedToken = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
-    if (!storedToken || storedToken.revokedAt || storedToken.expiresAt < new Date()) {
-      return res.status(401).json({ error: { code: 'INVALID_TOKEN', message: 'Invalid or expired refresh token' } });
+    // Verify token exists and is valid in DB
+    const dbToken = await prisma.refreshToken.findUnique({
+      where: { token: refreshToken },
+      include: { user: true }
+    });
+
+    if (!dbToken || dbToken.revokedAt || dbToken.expiresAt < new Date() || dbToken.deletedAt !== null) {
+      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Invalid refresh token' } });
     }
 
-    // Verify cryptographic validity
-    let decoded;
+    // Verify JWT signature
     try {
-      decoded = jwt.verify(refreshToken, refreshSecret) as { userId: string, role: string };
-    } catch (err) {
-      return res.status(401).json({ error: { code: 'INVALID_TOKEN', message: 'Invalid token signature' } });
+      jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET || 'r_secret');
+    } catch {
+      return res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Token expired or invalid' } });
     }
 
-    // Rotate token (revoke old, issue new)
+    // Revoke old token (rotation)
     await prisma.refreshToken.update({
-      where: { id: storedToken.id },
+      where: { id: dbToken.id },
       data: { revokedAt: new Date() }
     });
 
-    const tokens = generateTokens(decoded.userId, decoded.role);
+    // Issue new tokens (INCLUDING BRANCH ID)
+    const payload = { userId: dbToken.user.id, role: dbToken.user.role, branchId: dbToken.user.branchId };
+    const newAccessToken = jwt.sign(payload, process.env.JWT_SECRET || 'secret', { expiresIn: '15m' });
+    const newRefreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET || 'r_secret', { expiresIn: '7d' });
 
     await prisma.refreshToken.create({
       data: {
-        token: tokens.refreshToken,
-        userId: decoded.userId,
+        token: newRefreshToken,
+        userId: dbToken.user.id,
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
       }
     });
 
-    res.json({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken });
+    res.json({ accessToken: newAccessToken, refreshToken: newRefreshToken });
   } catch (error) {
     next(error);
   }

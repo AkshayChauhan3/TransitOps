@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,8 +11,9 @@ datasource db {
 // -----------------------------------------
 // ENUMS
 // -----------------------------------------
-
 enum Role {
+  SUPER_ADMIN
+  BRANCH_ADMIN
   FLEET_MANAGER
   DISPATCHER
   SAFETY_OFFICER
@@ -44,7 +42,8 @@ enum TripStatus {
 }
 
 enum MaintenanceStatus {
-  ACTIVE
+  PENDING
+  IN_PROGRESS
   COMPLETED
 }
 
@@ -57,19 +56,47 @@ enum ExpenseType {
 // MODELS
 // -----------------------------------------
 
+model Branch {
+  id            String    @id @default(uuid())
+  name          String
+  address       String
+  city          String
+  state         String
+  contactNumber String
+  adminId       String?   // Optional ID of the user managing this branch
+  
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  users         User[]
+  vehicles      Vehicle[]
+  drivers       Driver[]
+  trips         Trip[]
+  maintenance   MaintenanceLog[]
+}
+
 model User {
   id                  String         @id @default(uuid())
   email               String         @unique
   passwordHash        String
   name                String
   role                Role
+  
+  branchId            String?
+  branch              Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  
   failedLoginAttempts Int            @default(0)
   lockedUntil         DateTime?
+  
   createdAt           DateTime       @default(now())
   updatedAt           DateTime       @updatedAt
+  deletedAt           DateTime?
 
   refreshTokens       RefreshToken[]
   tripsCreated        Trip[]         @relation("TripCreator")
+
+  @@index([branchId])
 }
 
 model RefreshToken {
@@ -80,17 +107,10 @@ model RefreshToken {
   expiresAt DateTime
   revokedAt DateTime?
   createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
 
   @@index([userId])
-}
-
-model OrgSettings {
-  id           String   @id @default(uuid())
-  depotName    String
-  currency     String   @default("INR")
-  distanceUnit String   @default("km")
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
 }
 
 model Vehicle {
@@ -102,10 +122,15 @@ model Vehicle {
   maxLoadCapacity    Float
   odometer           Float
   acquisitionCost    Float
-  region             String
+  
   status             VehicleStatus   @default(AVAILABLE)
+  
+  branchId           String
+  branch             Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  
   createdAt          DateTime        @default(now())
   updatedAt          DateTime        @updatedAt
+  deletedAt          DateTime?
 
   trips              Trip[]
   maintenanceLogs    MaintenanceLog[]
@@ -113,7 +138,7 @@ model Vehicle {
   expenses           Expense[]
 
   @@index([status])
-  @@index([region])
+  @@index([branchId])
 }
 
 model Driver {
@@ -125,13 +150,19 @@ model Driver {
   contactNumber     String
   safetyScore       Float
   status            DriverStatus @default(AVAILABLE)
+  
+  branchId          String
+  branch            Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
+  deletedAt         DateTime?
 
   trips             Trip[]
 
   @@index([status])
   @@index([licenseExpiryDate])
+  @@index([branchId])
 }
 
 model Trip {
@@ -144,6 +175,9 @@ model Trip {
   
   driverId        String?
   driver          Driver?    @relation(fields: [driverId], references: [id], onDelete: Restrict)
+  
+  branchId        String
+  branch          Branch     @relation(fields: [branchId], references: [id], onDelete: Restrict)
   
   createdById     String
   createdBy       User       @relation("TripCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -158,8 +192,10 @@ model Trip {
   status          TripStatus @default(DRAFT)
   dispatchedAt    DateTime?
   completedAt     DateTime?
+  
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
+  deletedAt       DateTime?
 
   fuelLogs        FuelLog[]
   expenses        Expense[]
@@ -167,13 +203,19 @@ model Trip {
   @@index([status])
   @@index([vehicleId])
   @@index([driverId])
+  @@index([branchId])
   @@index([createdById])
 }
 
 model MaintenanceLog {
   id             String            @id @default(uuid())
+  
   vehicleId      String
   vehicle        Vehicle           @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
+  
+  branchId       String
+  branch         Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  
   serviceType    String
   description    String?
   cost           Float
@@ -181,16 +223,21 @@ model MaintenanceLog {
   startedAt      DateTime?
   completedAt    DateTime?
   technicianName String?
-  status         MaintenanceStatus @default(ACTIVE)
+  
+  status         MaintenanceStatus @default(PENDING)
+  
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
+  deletedAt      DateTime?
 
   @@index([vehicleId])
   @@index([status])
+  @@index([branchId])
 }
 
 model FuelLog {
   id          String   @id @default(uuid())
+  
   vehicleId   String
   vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   
@@ -205,6 +252,7 @@ model FuelLog {
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
 
   @@index([vehicleId])
   @@index([tripId])
@@ -212,6 +260,7 @@ model FuelLog {
 
 model Expense {
   id        String      @id @default(uuid())
+  
   vehicleId String
   vehicle   Vehicle     @relation(fields: [vehicleId], references: [id], onDelete: Restrict)
   
@@ -221,8 +270,10 @@ model Expense {
   type      ExpenseType
   amount    Float
   date      DateTime
+  
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
+  deletedAt DateTime?
 
   @@index([vehicleId])
   @@index([tripId])

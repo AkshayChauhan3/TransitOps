@@ -8,22 +8,20 @@ import { createFuelLogSchema, createExpenseSchema } from '../types';
 const router = Router();
 router.use(authenticateToken);
 
-// ==========================================
-// FUEL LOGS
-// ==========================================
-
-// GET /fuel-logs
 router.get('/fuel-logs', requirePermission('finance', 'view'), async (req, res, next) => {
   try {
     const { vehicleId, tripId } = req.query;
-    const where: any = {};
+    // Fuel logs don't have branchId directly, they join via vehicle
+    const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { vehicle: { branchId: req.user!.branchId! } }; 
+    
+    const where: any = { ...branchFilter, deletedAt: null };
     if (vehicleId) where.vehicleId = String(vehicleId);
     if (tripId) where.tripId = String(tripId);
 
     const logs = await prisma.fuelLog.findMany({
       where,
       orderBy: { date: 'desc' },
-      include: { vehicle: { select: { registrationNumber: true } } }
+      include: { vehicle: { select: { registrationNumber: true, branchId: true } } }
     });
     res.json(logs);
   } catch (error) {
@@ -31,14 +29,16 @@ router.get('/fuel-logs', requirePermission('finance', 'view'), async (req, res, 
   }
 });
 
-// POST /fuel-logs (Manual entry - trip completions do this automatically)
 router.post('/fuel-logs', requirePermission('finance', 'create'), validate(createFuelLogSchema), async (req, res, next) => {
   try {
+    // Validate vehicle belongs to the branch
+    if (req.user!.role !== 'SUPER_ADMIN') {
+      const vehicle = await prisma.vehicle.findFirst({ where: { id: req.body.vehicleId, branchId: req.user!.branchId!, deletedAt: null } });
+      if (!vehicle) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Vehicle does not belong to your branch' } });
+    }
+
     const log = await prisma.fuelLog.create({
-      data: {
-        ...req.body,
-        date: new Date(req.body.date)
-      }
+      data: { ...req.body, date: new Date(req.body.date) }
     });
     res.status(201).json(log);
   } catch (error) {
@@ -46,15 +46,12 @@ router.post('/fuel-logs', requirePermission('finance', 'create'), validate(creat
   }
 });
 
-// ==========================================
-// EXPENSES (Tolls, Fines, etc.)
-// ==========================================
-
-// GET /expenses
 router.get('/expenses', requirePermission('finance', 'view'), async (req, res, next) => {
   try {
     const { vehicleId, tripId, type } = req.query;
-    const where: any = {};
+    const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { vehicle: { branchId: req.user!.branchId! } };
+    
+    const where: any = { ...branchFilter, deletedAt: null };
     if (vehicleId) where.vehicleId = String(vehicleId);
     if (tripId) where.tripId = String(tripId);
     if (type) where.type = String(type);
@@ -69,14 +66,15 @@ router.get('/expenses', requirePermission('finance', 'view'), async (req, res, n
   }
 });
 
-// POST /expenses
 router.post('/expenses', requirePermission('finance', 'create'), validate(createExpenseSchema), async (req, res, next) => {
   try {
+    if (req.user!.role !== 'SUPER_ADMIN') {
+      const vehicle = await prisma.vehicle.findFirst({ where: { id: req.body.vehicleId, branchId: req.user!.branchId!, deletedAt: null } });
+      if (!vehicle) return res.status(403).json({ error: { code: 'FORBIDDEN', message: 'Vehicle does not belong to your branch' } });
+    }
+
     const expense = await prisma.expense.create({
-      data: {
-        ...req.body,
-        date: new Date(req.body.date)
-      }
+      data: { ...req.body, date: new Date(req.body.date) }
     });
     res.status(201).json(expense);
   } catch (error) {
@@ -84,35 +82,18 @@ router.post('/expenses', requirePermission('finance', 'create'), validate(create
   }
 });
 
-// ==========================================
-// AGGREGATED OPERATIONAL COST
-// ==========================================
-
-// GET /vehicles/:id/operational-cost
 router.get('/vehicles/:id/operational-cost', requirePermission('finance', 'view'), async (req, res, next) => {
   try {
     const vehicleId = req.params.id;
+    const branchFilter = req.user!.role === 'SUPER_ADMIN' ? {} : { branchId: req.user!.branchId! };
 
-    // Check if vehicle exists
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: vehicleId } });
-    if (!vehicle) {
-      return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Vehicle not found' } });
-    }
+    const vehicle = await prisma.vehicle.findFirst({ where: { id: vehicleId, ...branchFilter, deletedAt: null } });
+    if (!vehicle) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Vehicle not found' } });
 
-    // Run aggregations concurrently
     const [fuelCost, maintenanceCost, expensesCost] = await Promise.all([
-      prisma.fuelLog.aggregate({
-        where: { vehicleId },
-        _sum: { cost: true }
-      }),
-      prisma.maintenanceLog.aggregate({
-        where: { vehicleId },
-        _sum: { cost: true }
-      }),
-      prisma.expense.aggregate({
-        where: { vehicleId },
-        _sum: { amount: true }
-      })
+      prisma.fuelLog.aggregate({ where: { vehicleId, deletedAt: null }, _sum: { cost: true } }),
+      prisma.maintenanceLog.aggregate({ where: { vehicleId, deletedAt: null }, _sum: { cost: true } }),
+      prisma.expense.aggregate({ where: { vehicleId, deletedAt: null }, _sum: { amount: true } })
     ]);
 
     const totalFuel = fuelCost._sum.cost || 0;
@@ -121,11 +102,7 @@ router.get('/vehicles/:id/operational-cost', requirePermission('finance', 'view'
 
     res.json({
       vehicleId,
-      breakdown: {
-        fuel: totalFuel,
-        maintenance: totalMaintenance,
-        otherExpenses: totalExpenses
-      },
+      breakdown: { fuel: totalFuel, maintenance: totalMaintenance, otherExpenses: totalExpenses },
       totalOperationalCost: totalFuel + totalMaintenance + totalExpenses
     });
   } catch (error) {
